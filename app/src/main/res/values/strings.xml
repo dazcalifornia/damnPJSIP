@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Selen Alarm Box</string>
+    <string name="main_button">CALL HQ</string>
+    <string name="network_status">Internet Status</string>
+    <string name="call_status">Call Status</string>
+    <string name="internet_down">No Internet</string>
+    <string name="internet_up">Internet OK</string>
+    <string name="run_mode_status">RUN MODE</string>
+    <string name="library_started_message_background">RUNNING IN BACKGROUND MODE</string>
+    <string name="library_started_message_foreground">RUNNING IN FOREGROUND MODE</string>
+    <string name="caller_info">Caller Info</string>
+    <string name="registration_status">Registration Status</string>
+</resources>
