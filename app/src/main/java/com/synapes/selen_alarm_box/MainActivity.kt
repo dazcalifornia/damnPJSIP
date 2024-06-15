@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private val handler = Handler(Looper.getMainLooper(), this)
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
+    private val debounceCoroutineScope = CoroutineScope(Dispatchers.Main)
 
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
@@ -257,7 +258,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         // leave this one for ui hardware
         /* Setup Hardware Call button */
         if (utils.isGpioAvailable()) {
-            coroutineScope.launch {
+            debounceCoroutineScope.launch {
                 debounceButton(this)
             }
         }
