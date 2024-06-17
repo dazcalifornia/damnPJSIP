@@ -137,23 +137,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         checkPermissions()
 
 
-        /*
-        val audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-            16000,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        )
-
-        val sessionId = audioRecord.audioSessionId
-        val aec = AcousticEchoCanceler.create(sessionId)
-
-        if (aec != null && aec.enabled.not()) {
-            Log.d(TAG, " --- AEC enabled ---")
-            aec.enabled = true
-        }
-        */
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         // Enable Acoustic Echo Cancellation (AEC)
         val sessionId = audioManager.generateAudioSessionId()
@@ -183,7 +166,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             ) {
                 Log.d(TAG, " +++ NetworkCallback: Capabilities changed +++ ")
                 // TODO: implement notify observer
-                notifyChangeNetwork("Network CHANGED - FROM CALLBACK")
+                notifyChangeNetwork("Network CHANGED")
 //                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
 //                    notifyChangeNetwork("Internet Available")
 //                } else {
@@ -193,7 +176,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
             override fun onAvailable(network: Network) {
                 Log.d(" --NetworkCallback --", " ***** Internet available ***** ")
-                // TODO: implement notify observer
                 notifyChangeNetwork("Internet OK")
             }
 
@@ -249,23 +231,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 Log.e(TAG, "Error in coroutine cancel: $e")
             }
         }
-
-//        if (airplaneModeStatus) {
-//            binding.networkStatusTextView.text = "Please disable Airplane Mode"
-//            coroutineScope.launch {
-//                flashLedRapidly()
-//            }
-//            playSoundInLoop(SoundType.AIRPLANE_MODE)
-//        } else {
-//            stopPlayingSound()
-//            // cancel flashing LED
-//            try {
-//                coroutineScope.cancel()
-//            } catch (e: Exception) {
-//                Log.e(TAG, "Error in coroutine cancel: $e")
-//            }
-//        }
-
 
         // leave this one for ui hardware
         /* Setup Hardware Call button */
@@ -443,7 +408,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             } catch (e: Exception) {
                 println(e)
             }
-
         }
 
         // Button Released and in current call -> keep led on
@@ -469,8 +433,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         } else {
             Log.e(TAG, " ******** CAN'T REACH THIS POINT ********")
         }
-
-
     }
 
     private fun configureButtons(mode: String) {
@@ -712,7 +674,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 val prm = CallOpParam()
                 /* Only one call at anytime */
                 if (currentCall != null) {
-                    // FIXME: simulate call when busy
+                    // TODO: simulate call when busy
                     /*
                     prm.setStatusCode(pjsip_status_code.PJSIP_SC_BUSY_HERE);
                     try {
@@ -807,15 +769,21 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                             start()
                         }
                     }
+
                     SoundType.NO_INTERNET -> {
-                        mediaPlayer = MediaPlayer.create(this@MainActivity, R.raw.no_internet_check_mobile_data).apply {
+                        mediaPlayer = MediaPlayer.create(
+                            this@MainActivity,
+                            R.raw.no_internet_check_mobile_data
+                        ).apply {
                             start()
                         }
                     }
+
                     SoundType.RETRY_REGISTER -> {
-                        mediaPlayer = MediaPlayer.create(this@MainActivity, R.raw.registration_failed).apply {
-                            start()
-                        }
+                        mediaPlayer =
+                            MediaPlayer.create(this@MainActivity, R.raw.registration_failed).apply {
+                                start()
+                            }
                     }
                 }
             }
