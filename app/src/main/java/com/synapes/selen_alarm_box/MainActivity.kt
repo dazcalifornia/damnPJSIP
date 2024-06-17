@@ -69,6 +69,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         var account: MyAccount? = null
         var accCfg: AccountConfig? = null
         private var lastCallInfo: CallInfo? = null
+
+        var isActivityRunning: Boolean = false
     }
 
     private val airplaneModeReceiver = object : BroadcastReceiver() {
@@ -97,6 +99,16 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             utils.turnOffLed()
             delay(100) // delay in milliseconds
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isActivityRunning = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isActivityRunning = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

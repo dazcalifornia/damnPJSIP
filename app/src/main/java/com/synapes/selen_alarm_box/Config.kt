@@ -3,8 +3,9 @@ package com.synapes.selen_alarm_box
 object Config {
     //  ****************************************************
     const val SERVER_ADDRESS = "synapes-pbx-poc-01.online" // --> VPN
-    const val SELF_EXT = "8888"
-    const val DESTINATION_EXT = "9595"
+//    const val SELF_EXT = "8888" // --> Device (SimComm + Screen)
+    const val SELF_EXT = "5555" // --> Device (Quectel No Screen)
+    const val DESTINATION_EXT = "9596"
 //    const val DESTINATION_EXT = "9999"
     const val ACC_ID_URI = "sip:$SELF_EXT@$SERVER_ADDRESS"
     const val CALL_DST_URI = "sip:$DESTINATION_EXT@$SERVER_ADDRESS"
