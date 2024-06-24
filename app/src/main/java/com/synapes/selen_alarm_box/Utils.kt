@@ -55,6 +55,7 @@ class Utils {
 
 
     // FIXME: CHECK IF THIS WORKS ON ANDROID 7
+    // DO NOT USE FOR NOW
     internal fun isNetworkDeviceTurnedOn(context: Context): Boolean {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

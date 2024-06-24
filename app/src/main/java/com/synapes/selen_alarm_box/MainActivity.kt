@@ -15,6 +15,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -61,6 +62,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private var isSoundPlayed = false
 
+    private var internetStatus = false
+
     // Singleton instance
     companion object {
         internal val TAG = MainActivity::class.java.simpleName
@@ -73,24 +76,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         var isActivityRunning: Boolean = false
     }
 
-    private val airplaneModeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_AIRPLANE_MODE_CHANGED) {
-                val isAirplaneModeOn = intent.getBooleanExtra("state", false)
-                if (!isAirplaneModeOn) {
-                    // Airplane mode has been turned off
-                    // Do what you need to do here
-                    binding.networkStatusTextView.text = "Airplane Mode is On"
+    private val restartBroadcastReceiver = RestartBroadcastReceiver()
 
-                } else {
-                    // Airplane mode has been turned on
-                    // Do what you need to do here
-                    binding.networkStatusTextView.text = "Airplane Mode is Off"
-                }
-
-            }
-        }
-    }
+    private val airplaneModeReceiver = AirplaneModeBroadcastReceiver()
 
     suspend fun CoroutineScope.flashLedRapidly() {
         while (isActive) {
@@ -117,7 +105,19 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         // Turn off the LED when the app starts
         utils.turnOffLed()
 
-        registerReceiver(airplaneModeReceiver, IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED))
+        registerReceiver(
+            airplaneModeReceiver,
+            IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
+        )
+        // FIXME: --> BOOT COMPLETED NEEDED?
+        registerReceiver(
+            restartBroadcastReceiver,
+            IntentFilter(Intent.ACTION_BOOT_COMPLETED)
+        )
+        registerReceiver(
+            restartBroadcastReceiver,
+            IntentFilter(Intent.ACTION_REBOOT)
+        )
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e("Error", "Uncaught exception in thread ${thread.name}", throwable)
@@ -160,28 +160,16 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED).build()
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(
-                network: Network,
-                networkCapabilities: NetworkCapabilities,
-            ) {
-                Log.d(TAG, " +++ NetworkCallback: Capabilities changed +++ ")
-                // TODO: implement notify observer
-                notifyChangeNetwork("Network CHANGED")
-//                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-//                    notifyChangeNetwork("Internet Available")
-//                } else {
-//                    notifyChangeNetwork("No Internet Connection")
-//                }
-            }
-
             override fun onAvailable(network: Network) {
                 Log.d(" --NetworkCallback --", " ***** Internet available ***** ")
                 notifyChangeNetwork("Internet OK")
+                internetStatus = true
             }
 
             override fun onLost(network: Network) {
                 Log.d(" -- NetworkCallback", " ***** No internet connection ******")
 
+                internetStatus = false
                 notifyChangeNetwork("No Internet")
                 coroutineScope.launch {
                     flashLedRapidly()
@@ -197,31 +185,38 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
         // END NETWORK REGISTRATION CALLBACK
 
+        // FIXME: DO NOT USE FOR NOW FOR ANDROID 7 --> use network callback instead
         // Set the network status text on first start
-        if (utils.isNetworkDeviceTurnedOn(this)) {
-            binding.networkStatusTextView.text = getString(R.string.internet_up)
-        } else {
-            binding.networkStatusTextView.text = getString(R.string.internet_down)
-        }
+//        if (utils.isNetworkDeviceTurnedOn(this)) {
+//            binding.networkStatusTextView.text = getString(R.string.internet_up)
+//        } else {
+//            binding.networkStatusTextView.text = getString(R.string.internet_down)
+//        }
 
-        val vpnStatus = utils.isVpnActive(this)
         val airplaneModeStatus = utils.isAirplaneModeOn(this)
+        val vpnStatus = utils.isVpnActive(this)
+        // FIXME: DO NOT USE FOR NOW FOR ANDROID 7
+//        val internetStatus = utils.isNetworkDeviceTurnedOn(this)
+
         Log.d(TAG, " --- Airplane Mode Status: $airplaneModeStatus --- ")
         Log.d(TAG, " --- VPN Status: $vpnStatus --- ")
-        if (!vpnStatus) {
-            // play sound
-            // flash LED
+        Log.d(TAG, " --- Internet Status: $internetStatus --- ")
+
+        if (airplaneModeStatus) {
+//            binding.networkStatusTextView.text = "Please disable Airplane Mode"
+            disableCallButton("Airplane On")
+            coroutineScope.launch {
+                flashLedRapidly()
+            }
+            playSoundInLoop(SoundType.AIRPLANE_MODE)
+            return
+        } else if (!vpnStatus) {
             disableCallButton("VPN is not active")
             coroutineScope.launch {
                 flashLedRapidly()
             }
             playSoundInLoop(SoundType.NO_VPN)
-        } else if (airplaneModeStatus) {
-            binding.networkStatusTextView.text = "Please disable Airplane Mode"
-            coroutineScope.launch {
-                flashLedRapidly()
-            }
-            playSoundInLoop(SoundType.AIRPLANE_MODE)
+            return
         } else {
             stopPlayingSound()
             // cancel flashing LED
@@ -230,6 +225,18 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             } catch (e: Exception) {
                 Log.e(TAG, "Error in coroutine cancel: $e")
             }
+        }
+
+
+        startSelenForegroundService()
+
+        if (!vpnStatus || airplaneModeStatus || !internetStatus) {
+            Log.d(
+                TAG,
+                " --- VPN is not active, or device is in airplane mode, or internet is not available. Not starting PJSUA. --- "
+            )
+        } else {
+            startPJSUA()
         }
 
         // leave this one for ui hardware
@@ -273,7 +280,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             }
         }
 
-        startPJSUA()
 
         binding.callButton.setOnClickListener() {
             if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
@@ -303,9 +309,22 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-    private fun startPJSUA() {
-        Log.d(TAG, " --- Starting PJSUA --- ")
+    private fun startSelenForegroundService() {
+        Log.d(TAG, " --- Starting SelenForegroundService --- ")
+        val foregroundIntent = Intent(this, SelenForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(foregroundIntent)
+        } else {
+            startService(foregroundIntent)
+        }
+        SelenForegroundService.libraryStartedLiveData.observe(this) { message ->
+            Log.d(TAG, " --- Foreground Service: $message --- ")
+        }
+    }
 
+    /*
+    private fun startSelenForegroundService() {
+        Log.d(TAG, " --- Starting SelenForegroundService --- ")
         // Start foreground notification service anyway (regardless of the run mode)
         // This is because the service is needed to keep the app alive
         // And run on Android 7 will crash if run in foreground only
@@ -314,6 +333,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         SelenForegroundService.libraryStartedLiveData.observe(this) { message ->
             Log.d(TAG, " --- Foreground Service: $message --- ")
         }
+    }
+    */
+
+    private fun startPJSUA() {
+        Log.d(TAG, " --- Starting PJSUA --- ")
+
 
         // Initialize PJSUA
         app = app ?: MyApp().also {
@@ -458,10 +483,20 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, " --- onDestroy ---")
-        unregisterReceiver(airplaneModeReceiver)
+        //FIXME: --> UNREGISTER RECEIVER NEEDED?
+//        unregisterReceiver(airplaneModeReceiver)
+//        unregisterReceiver(restartBroadcastReceiver)
         connectivityManager.unregisterNetworkCallback(networkCallback)
         stopPlayingSound()
         coroutineScope.cancel()
+
+        // Unregister PJSUAP install
+        account?.setRegistration(false)
+
+        // Send 'APP_Restart' broadcast
+        val intent = Intent()
+        intent.action = "com.synapes.selen_alarm_box.APP_RESTART"
+        sendBroadcast(intent)
     }
 
     private fun checkPermissions() {
@@ -538,9 +573,13 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     }
 
     override fun notifyBuddyState(buddy: MyBuddy?) {
-        Log.d(TAG, " ## OBSERVER notifyBuddyState ## - Buddy state: ${buddy!!.statusText}")
-        val msg = handler.obtainMessage(CallMessageType.BUDDY_STATE, buddy)
-        msg.sendToTarget()
+        try {
+            Log.d(TAG, " ## OBSERVER notifyBuddyState ## - Buddy state: ${buddy!!.statusText}")
+            val msg = handler.obtainMessage(CallMessageType.BUDDY_STATE, buddy)
+            msg.sendToTarget()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in notifyBuddyState: $e")
+        }
     }
 
     override fun notifyChangeNetwork(status: String?) {
@@ -618,18 +657,27 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 val status = msg.obj as String
                 Log.d(TAG, " +++ handleMessage - Network status: $status +++ ")
 
-                app!!.handleNetworkChange()
+                try {
+                    app!!.handleNetworkChange()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in handling network change: $e")
+                }
                 binding.networkStatusTextView.text = status
             }
 
             CallMessageType.BUDDY_STATE -> {
-                val buddy = msg.obj as MyBuddy
-                Log.d(TAG, " +++ handleMessage - Buddy state: ${buddy.statusText} +++ ")
+                try {
+                    val buddy = msg.obj as MyBuddy
+                    Log.d(TAG, " +++ handleMessage - Buddy state: ${buddy.statusText} +++ ")
 //                binding.destinationTextView.text =
 //                    "HQ #${Config.DESTINATION_EXT}: Status: ${buddy.statusText}"
 
-                /* Return back Call activity */
-                notifyCallState(currentCall)
+                    /* Return back Call activity */
+                    notifyCallState(currentCall)
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in buddy state: $e")
+                }
             }
 
             CallMessageType.REG_STATE -> {

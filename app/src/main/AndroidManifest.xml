@@ -59,18 +59,26 @@
         <service
             android:name=".SelenForegroundService"
             android:enabled="true"
-            android:exported="true"
-            android:foregroundServiceType="microphone" />
-<!--        <service-->
-<!--            android:name=".SelenBackgroundService"-->
-<!--            android:enabled="true"-->
-<!--            android:exported="true" />-->
-
+            android:exported="true"/>
+<!--            android:foregroundServiceType="microphone" />-->
         <receiver
             android:name=".SelenBroadcastReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".RestartBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.synapes.selen_alarm_box.APP_RESTART" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".AirplaneModeBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.AIRPLANE_MODE_CHANGED" />
             </intent-filter>
         </receiver>
         <activity

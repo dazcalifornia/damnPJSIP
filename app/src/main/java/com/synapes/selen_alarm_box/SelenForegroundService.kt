@@ -73,6 +73,11 @@ class SelenForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Restart the service if it gets destroyed
+        val broadcastIntent = Intent(this, RestartBroadcastReceiver::class.java)
+        sendBroadcast(broadcastIntent)
     }
 
 }
+
+
