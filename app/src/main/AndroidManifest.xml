@@ -2,7 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- adb shell pm grant your.package.name android.permission.DUMP -->
+    <!--    <uses-permission android:name="android.permission.INTERNET" />-->
     <uses-permission android:name="android.permission.GPIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- only granted to system apps -->
@@ -19,16 +21,16 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
 
-
     <!--    <uses-feature-->
-<!--        android:glEsVersion="0x00020000"-->
-<!--        android:required="false" />-->
+    <!--        android:glEsVersion="0x00020000"-->
+    <!--        android:required="false" />-->
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="true" />
@@ -47,6 +49,7 @@
         android:required="true" />
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -59,8 +62,9 @@
         <service
             android:name=".SelenForegroundService"
             android:enabled="true"
-            android:exported="true"/>
-<!--            android:foregroundServiceType="microphone" />-->
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback" />
+
         <receiver
             android:name=".SelenBroadcastReceiver"
             android:exported="true">
@@ -75,19 +79,20 @@
                 <action android:name="com.synapes.selen_alarm_box.APP_RESTART" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".AirplaneModeBroadcastReceiver"
+        <receiver
+            android:name=".AirplaneModeBroadcastReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.AIRPLANE_MODE_CHANGED" />
             </intent-filter>
         </receiver>
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

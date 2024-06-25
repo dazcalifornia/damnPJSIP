@@ -29,6 +29,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.synapes.selen_alarm_box.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
+import org.acra.ktx.sendWithAcra
 import org.pjsip.pjsua2.AccountConfig
 import org.pjsip.pjsua2.AuthCredInfo
 import org.pjsip.pjsua2.BuddyConfig
@@ -52,7 +53,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
 
     private var lastButtonState = 0
-    private var debounceTime = 250L
+    private var debounceTime = 100L
 
     private val utils = Utils()
 
@@ -120,7 +121,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         )
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e("Error", "Uncaught exception in thread ${thread.name}", throwable)
+            Log.e(TAG, "+++ Uncaught exception in thread ${thread.name} +++", throwable)
             restartApp()
         }
 
@@ -224,6 +225,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 coroutineScope.cancel()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in coroutine cancel: $e")
+                RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
             }
         }
 
@@ -295,6 +297,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     utils.turnOnLed()
                 } catch (e: Exception) {
                     println(e)
+                    RuntimeException("Error in making call: $e").sendWithAcra()
                 }
             } else {
                 try {
@@ -304,6 +307,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     utils.turnOffLed()
                 } catch (e: Exception) {
                     println(e)
+                    RuntimeException("Error in hanging up call: $e").sendWithAcra()
                 }
             }
         }
@@ -349,6 +353,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 }
             } catch (e: InterruptedException) {
                 Log.e(TAG, "Error in thread sleep: $e")
+                RuntimeException("Error in thread sleep: $e").sendWithAcra()
             }
             it.init(this, filesDir.absolutePath)
         }
@@ -432,6 +437,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 utils.turnOnLed()
             } catch (e: Exception) {
                 println(e)
+                RuntimeException("Error in making call: $e").sendWithAcra()
             }
         }
 
@@ -450,6 +456,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 if (buttonState == 0) utils.turnOffLed()
             } catch (e: Exception) {
                 println(e)
+                RuntimeException("Error in hanging up call: $e").sendWithAcra()
             }
         }
         // Normal state (button released and no ongoing call) -> turn off led
@@ -488,7 +495,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //        unregisterReceiver(restartBroadcastReceiver)
         connectivityManager.unregisterNetworkCallback(networkCallback)
         stopPlayingSound()
-        coroutineScope.cancel()
+        // FIXME: --> maybe it causes the button to not reconize the press first few times after restart
+//        coroutineScope.cancel()
 
         // Unregister PJSUAP install
         account?.setRegistration(false)
@@ -515,7 +523,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             Manifest.permission.FOREGROUND_SERVICE,
             Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
             Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION
+            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
         )
         ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
     }
@@ -556,6 +565,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             ci = call.info
         } catch (e: Exception) {
             e.printStackTrace()
+            RuntimeException("Error in getting call info: $e").sendWithAcra()
         }
         if (ci != null) {
             val msg = handler.obtainMessage(CallMessageType.CALL_STATE, ci)
@@ -579,6 +589,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             msg.sendToTarget()
         } catch (e: Exception) {
             Log.e(TAG, "Error in notifyBuddyState: $e")
+            RuntimeException("Error in notifyBuddyState: $e").sendWithAcra()
         }
     }
 
@@ -622,6 +633,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                             stopPlayingSound()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error in coroutine cancel: $e")
+                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
                         binding.callButton.text = CallButtonTyoe.RE_REGISTER
@@ -661,6 +673,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     app!!.handleNetworkChange()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in handling network change: $e")
+                    RuntimeException("Error in handling network change: $e").sendWithAcra()
                 }
                 binding.networkStatusTextView.text = status
             }
@@ -677,6 +690,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in buddy state: $e")
+                    RuntimeException("Error in buddy state: $e").sendWithAcra()
                 }
             }
 
@@ -707,6 +721,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                             stopPlayingSound()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error in coroutine cancel: $e")
+                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
                         binding.callButton.text = CallButtonTyoe.RE_REGISTER
@@ -746,6 +761,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     } catch (e: Exception) {
                         utils.turnOffLed()
                         Log.e(TAG, " +++ Error in answering call: $e +++ ")
+                        RuntimeException("Error in answering call: $e").sendWithAcra()
                     }
                     currentCall = call
 
@@ -754,6 +770,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //                        updateCallState(lastCallInfo)
                     } catch (e: Exception) {
                         println(e)
+                        RuntimeException("Error in updating call state: $e").sendWithAcra()
                     }
                 }
             }
@@ -783,6 +800,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in force re-registration: $e")
+            RuntimeException("Error in force re-registration: $e").sendWithAcra()
         }
     }
 

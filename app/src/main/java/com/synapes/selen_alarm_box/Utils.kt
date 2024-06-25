@@ -13,6 +13,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import org.acra.ACRA
+import org.acra.ktx.sendWithAcra
+
 
 class Utils {
 
@@ -105,6 +108,11 @@ class Utils {
     }
 
     fun isVpnActive(context: Context): Boolean {
+        // Skip VPN check if on emulator
+
+        if (isEmulator()) {
+            return true
+        }
         val connectivityManager = ContextCompat.getSystemService(context, ConnectivityManager::class.java)
         val activeNetworks = connectivityManager?.allNetworks ?: emptyArray()
 
@@ -126,6 +134,24 @@ class Utils {
     }
 
     fun simulateCrash() {
-        throw RuntimeException("This is a crash")
+        val exception = RuntimeException("This is a crash - simulated")
+        exception.sendWithAcra()
+        throw exception
+
+
+//        throw RuntimeException("This is a crash")
+    }
+
+    fun isEmulator(): Boolean {
+        Log.d("Build.FINGERPRINT", Build.FINGERPRINT)
+        return Build.FINGERPRINT.startsWith("generic")
+                || Build.FINGERPRINT.startsWith("unknown")
+                || Build.MODEL.contains("sdk_gphone64_arm64")
+                || Build.MODEL.contains("google_sdk")
+                || Build.MODEL.contains("Emulator")
+                || Build.MODEL.contains("Android SDK built for x86")
+                || Build.MANUFACTURER.contains("Genymotion")
+                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
+                || "google_sdk" == Build.PRODUCT
     }
 }
