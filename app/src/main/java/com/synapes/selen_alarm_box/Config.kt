@@ -1,11 +1,12 @@
 package com.synapes.selen_alarm_box
 
 object Config {
+    const val DEBUG_MODE = true
     //  ****************************************************
     const val SERVER_ADDRESS = "synapes-pbx-poc-01.online" // --> VPN
-//    const val SELF_EXT = "5001" // --> Device (SimComm + Screen)
+    const val SELF_EXT = "5001" // --> Device (SimComm + Screen)
 //    const val SELF_EXT = "5002" // --> Device (Redbox Quectel No Screen)
-    const val SELF_EXT = "5003" // --> Device (Android 14 Tablet)
+//    const val SELF_EXT = "5003" // --> Device (Android 14 Tablet)
     const val DESTINATION_EXT = "1000" // --> HQ Firefox Browser
 //    const val DESTINATION_EXT = "9999"
     const val ACC_ID_URI = "sip:$SELF_EXT@$SERVER_ADDRESS"

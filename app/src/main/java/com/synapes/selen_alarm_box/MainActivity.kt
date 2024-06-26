@@ -283,6 +283,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
 
 
+        if (Config.DEBUG_MODE) {
+            binding.debugButton.setOnClickListener() {
+                utils.simulateCrash()
+            }
+        }
+
         binding.callButton.setOnClickListener() {
             if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
                 forceReRegistration()
@@ -487,6 +493,19 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         binding.callButton.text = runModeText
     }
 
+    override fun onPause() {
+        super.onPause()
+        try {
+            // Unregister PJSUA
+            if (app?.accList?.size!! > 0 && account?.isRegistrationActive() == true) {
+                account?.setRegistration(false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering PJSUA: $e")
+            RuntimeException("RuntimeException - Error unregistering PJSUA - onPause: $e").sendWithAcra()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, " --- onDestroy ---")
@@ -495,11 +514,17 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //        unregisterReceiver(restartBroadcastReceiver)
         connectivityManager.unregisterNetworkCallback(networkCallback)
         stopPlayingSound()
-        // FIXME: --> maybe it causes the button to not reconize the press first few times after restart
+        // FIXME: --> maybe it causes the button to not recognize the press first few times after restart
 //        coroutineScope.cancel()
 
         // Unregister PJSUAP install
-        account?.setRegistration(false)
+        try {
+            // Unregister PJSUA
+            account?.setRegistration(false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering PJSUA: $e")
+            RuntimeException("Error unregistering PJSUA - onDestroy: $e").sendWithAcra()
+        }
 
         // Send 'APP_Restart' broadcast
         val intent = Intent()

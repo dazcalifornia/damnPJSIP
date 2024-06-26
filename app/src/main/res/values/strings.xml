@@ -10,4 +10,5 @@
     <string name="library_started_message_foreground">RUNNING IN FOREGROUND MODE</string>
     <string name="caller_info">Caller Info</string>
     <string name="registration_status">Registration Status</string>
+    <string name="debugButtonText">debug</string>
 </resources>
