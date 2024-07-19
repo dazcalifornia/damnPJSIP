@@ -43,7 +43,9 @@ android {
 }
 
 dependencies {
+    val appcompat_version = "1.7.0"
     val acraVersion = "5.11.3"
+
     implementation("ch.acra:acra-http:$acraVersion")
     implementation("ch.acra:acra-toast:$acraVersion")
     implementation("ch.acra:acra-limiter:$acraVersion")
@@ -53,7 +55,6 @@ dependencies {
     compileOnly("com.google.auto.service:auto-service-annotations:1.1.1")
 
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
@@ -63,4 +64,12 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.jetbrains.kotlinx.coroutines.android)
+
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+
+
+    implementation("androidx.appcompat:appcompat:$appcompat_version")
+    // For loading and tinting drawables on older versions of the platform
+    implementation("androidx.appcompat:appcompat-resources:$appcompat_version")
+
 }

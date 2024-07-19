@@ -3,11 +3,12 @@ package com.synapes.selen_alarm_box
 import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
+import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.audiofx.AcousticEchoCanceler
@@ -22,14 +23,18 @@ import android.os.Looper
 import android.os.Message
 import android.os.Process
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
 import com.synapes.selen_alarm_box.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import org.acra.ktx.sendWithAcra
+import org.json.JSONException
+import org.json.JSONObject
 import org.pjsip.pjsua2.AccountConfig
 import org.pjsip.pjsua2.AuthCredInfo
 import org.pjsip.pjsua2.BuddyConfig
@@ -37,8 +42,14 @@ import org.pjsip.pjsua2.CallInfo
 import org.pjsip.pjsua2.CallOpParam
 import org.pjsip.pjsua2.pjsip_inv_state
 import org.pjsip.pjsua2.pjsip_status_code
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
-class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
+
+class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Informer {
     init {
         System.loadLibrary("pjsua2")
     }
@@ -81,6 +92,20 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private val airplaneModeReceiver = AirplaneModeBroadcastReceiver()
 
+    // integer value of the REQUEST_EXTERNAL_STORAGE is 1
+    private val REQUEST_EXTERNAL_STORAGE = 1
+
+    // The string of the permission inside our Manifest file
+    private val PERMISSIONS_STORAGE = arrayOf(
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+
+    // progress dialog to be used when download in process
+    private val progressDialog: ProgressDialog? = null
+
+    // Create a new UpdateApp instance
+    private val update: UpdateApp = UpdateApp(this, this)
+
     suspend fun CoroutineScope.flashLedRapidly() {
         while (isActive) {
             utils.turnOnLed()
@@ -106,19 +131,20 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         // Turn off the LED when the app starts
         utils.turnOffLed()
 
-        registerReceiver(
-            airplaneModeReceiver,
-            IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-        )
-        // FIXME: --> BOOT COMPLETED NEEDED?
-        registerReceiver(
-            restartBroadcastReceiver,
-            IntentFilter(Intent.ACTION_BOOT_COMPLETED)
-        )
-        registerReceiver(
-            restartBroadcastReceiver,
-            IntentFilter(Intent.ACTION_REBOOT)
-        )
+        // FIXME ALREADY SPEC IN MANIFEST
+//        registerReceiver(
+//            airplaneModeReceiver,
+//            IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
+//        )
+//        // FIXME: --> BOOT COMPLETED NEEDED?
+//        registerReceiver(
+//            restartBroadcastReceiver,
+//            IntentFilter(Intent.ACTION_BOOT_COMPLETED)
+//        )
+//        registerReceiver(
+//            restartBroadcastReceiver,
+//            IntentFilter(Intent.ACTION_REBOOT)
+//        )
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e(TAG, "+++ Uncaught exception in thread ${thread.name} +++", throwable)
@@ -287,6 +313,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             binding.debugButton.setOnClickListener() {
                 utils.simulateCrash()
             }
+        } else {
+            binding.debugButton.isEnabled = false
         }
 
         binding.callButton.setOnClickListener() {
@@ -317,6 +345,11 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 }
             }
         }
+
+        lifecycleScope.launch {
+            checkForUpdates()
+        }
+
     }
 
     private fun startSelenForegroundService() {
@@ -532,28 +565,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         sendBroadcast(intent)
     }
 
-    private fun checkPermissions() {
-        // TODO: READ MORE PERMISSIONS
-        val permissions = arrayOf(
-            Manifest.permission.INTERNET,
-            Manifest.permission.WAKE_LOCK,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS,
-            Manifest.permission.ACCESS_WIFI_STATE,
-            Manifest.permission.ACCESS_NETWORK_STATE,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.RECEIVE_BOOT_COMPLETED,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
-            Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
-            Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
-        )
-        ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
-    }
-
     private fun putData(uri: String, status: String?): HashMap<String, String?> {
         val item = HashMap<String, String?>()
         item["uri"] = uri
@@ -619,9 +630,19 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     }
 
     override fun notifyChangeNetwork(status: String?) {
-        Log.d(TAG, " ## OBSERVER notifyChangeNetwork ## - Network status: $status")
-        val msg = handler.obtainMessage(CallMessageType.CHANGE_NETWORK, status)
-        msg.sendToTarget()
+        try {
+            if (status == null) {
+                Log.e(TAG, " +++ Error in notifyChangeNetwork: status is null +++ ")
+                return
+            } else {
+                Log.d(TAG, " ## OBSERVER notifyChangeNetwork ## - Network status: $status")
+                val msg = handler.obtainMessage(CallMessageType.CHANGE_NETWORK, status)
+                msg.sendToTarget()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in notifyChangeNetwork: $e")
+            RuntimeException("Error in notifyChangeNetwork: $e").sendWithAcra()
+        }
     }
 
     /***********************************************************************************************
@@ -829,16 +850,29 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
+    //    private fun restartApp() {
+//        val intent = Intent(applicationContext, MainActivity::class.java)
+//        val pendingIntent = PendingIntent.getActivity(
+//            applicationContext,
+//            0,
+//            intent,
+//            PendingIntent.FLAG_UPDATE_CURRENT
+//        )
+//        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+//        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 1000, pendingIntent)
+//        System.exit(0)
+//    }
     private fun restartApp() {
         val intent = Intent(applicationContext, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
+        val mPendingIntentId = 123456
+        val mPendingIntent = PendingIntent.getActivity(
             applicationContext,
-            0,
+            mPendingIntentId,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 1000, pendingIntent)
+        val mgr = applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent)
         System.exit(0)
     }
 
@@ -921,4 +955,111 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         const val NO_INTERNET = "no_internet"
         const val RETRY_REGISTER = "retry_register"
     }
+
+
+    private fun checkPermissions() {
+        // TODO: READ MORE PERMISSIONS
+        val permissions = arrayOf(
+            Manifest.permission.INTERNET,
+            Manifest.permission.WAKE_LOCK,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS,
+            Manifest.permission.ACCESS_WIFI_STATE,
+            Manifest.permission.ACCESS_NETWORK_STATE,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.RECEIVE_BOOT_COMPLETED,
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
+            Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
+            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        )
+        ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
+    }
+
+    @Throws(IOException::class)
+    fun downloadData(strUrl: String?): String {
+        var data = ""
+        if (strUrl == null) {
+            throw IllegalArgumentException("URL cannot be null")
+        }
+        try {
+            val url = URL(strUrl)
+            val connection = url.openConnection() as? HttpURLConnection
+            connection?.setRequestMethod("GET")
+            connection?.connect()
+            val `is` = connection?.inputStream
+            if (`is` == null) {
+                throw IOException("Could not open connection")
+            }
+            val br = BufferedReader(InputStreamReader(`is`))
+            val sb = StringBuffer()
+            var line: String? = ""
+            while (br.readLine().also { line = it } != null) {
+                sb.append(line)
+            }
+            data = sb.toString()
+            br.close()
+            `is`.close()
+        } catch (e: java.lang.Exception) {
+            Log.d(TAG, "downloadData: Error! ", e)
+            throw e
+        }
+        return data
+    }
+
+    suspend fun checkForUpdates() = coroutineScope {
+        Log.d(TAG, "Checking for updates...")
+        withContext(Dispatchers.IO) {
+            try {
+                val data = downloadData(Config.DROID_SERVER_CHECK_URL)
+                val jsonObject = JSONObject(data)
+                val elements = jsonObject.getJSONArray("elements").getJSONObject(0)
+                val newVersionCode = elements.getString("versionCode").toInt()
+                val info = packageManager.getPackageInfo(packageName, 0)
+
+                Log.d(TAG, "Current version code: ${info.versionCode}")
+                if (info.versionCode < newVersionCode) {
+                    update.updateApp(Config.DROID_SERVER_VERSION_UPDATE_URL)
+                } else {
+                    progressDialog?.dismiss()
+                }
+            } catch (e: IOException) {
+                progressDialog?.dismiss()
+                e.printStackTrace()
+                showNegativeMessage()
+            } catch (e: JSONException) {
+                progressDialog?.dismiss()
+                e.printStackTrace()
+                showNegativeMessage()
+            } catch (e: PackageManager.NameNotFoundException) {
+                progressDialog?.dismiss()
+                e.printStackTrace()
+                showNegativeMessage()
+            }
+        }
+    }
+
+    private fun showNegativeMessage() {
+        runOnUiThread {
+            Toast.makeText(
+                this@MainActivity,
+                "Error in downloading JSON data",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    override fun finished(output: String?) {
+        progressDialog?.dismiss()
+    }
+
+    override fun setPercent(percent: String?) {
+        progressDialog?.setMessage("Downloading " + percent);
+    }
+
+
 }

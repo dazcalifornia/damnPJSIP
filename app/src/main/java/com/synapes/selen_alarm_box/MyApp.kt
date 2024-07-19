@@ -17,7 +17,7 @@ interface MyAppObserver {
 
 class MyLogWriter : LogWriter() {
     override fun write(entry: LogEntry) {
-        println(entry.msg)
+//        println(entry.msg)
         Log.d("MyLogWriter", entry.msg)
     }
 }

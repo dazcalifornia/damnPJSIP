@@ -8,6 +8,12 @@ import org.acra.data.StringFormat
 import org.acra.ktx.initAcra
 
 class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Config.initialize(this)
+        PreferencesManager.dumpAllPreferences(this)
+
+    }
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         initAcra {
