@@ -9,7 +9,7 @@ object PreferencesManager {
 
     private const val KEY_EXTENSION_NUMBER = "extension_number"
     private const val KEY_DESTINATION_NUMBER = "destination_number"
-    private const val DEFAULT_SELF_EXT = "9999"
+    private const val DEFAULT_SELF_EXT = "999999999"
     private const val DEFAULT_DESTINATION_EXT = "1000"
 
     private val CONTENT_URI = Uri.parse("content://com.synapes.android_voip_watchdog.provider/prefs")

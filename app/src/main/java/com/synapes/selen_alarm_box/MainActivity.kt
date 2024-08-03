@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.media.AudioManager
@@ -88,18 +87,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         var isActivityRunning: Boolean = false
     }
 
-    private val restartBroadcastReceiver = RestartBroadcastReceiver()
-
-    private val airplaneModeReceiver = AirplaneModeBroadcastReceiver()
-
-    // integer value of the REQUEST_EXTERNAL_STORAGE is 1
-    private val REQUEST_EXTERNAL_STORAGE = 1
-
-    // The string of the permission inside our Manifest file
-    private val PERMISSIONS_STORAGE = arrayOf(
-        Manifest.permission.WRITE_EXTERNAL_STORAGE
-    )
-
     // progress dialog to be used when download in process
     private val progressDialog: ProgressDialog? = null
 
@@ -131,23 +118,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         // Turn off the LED when the app starts
         utils.turnOffLed()
 
-        // FIXME ALREADY SPEC IN MANIFEST
-//        registerReceiver(
-//            airplaneModeReceiver,
-//            IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-//        )
-//        // FIXME: --> BOOT COMPLETED NEEDED?
-//        registerReceiver(
-//            restartBroadcastReceiver,
-//            IntentFilter(Intent.ACTION_BOOT_COMPLETED)
-//        )
-//        registerReceiver(
-//            restartBroadcastReceiver,
-//            IntentFilter(Intent.ACTION_REBOOT)
-//        )
-
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e(TAG, "+++ Uncaught exception in thread ${thread.name} +++", throwable)
+            RuntimeException("Uncaught exception in thread ${thread.name}: $throwable").sendWithAcra()
             restartApp()
         }
 
@@ -212,18 +185,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 
         // END NETWORK REGISTRATION CALLBACK
 
-        // FIXME: DO NOT USE FOR NOW FOR ANDROID 7 --> use network callback instead
-        // Set the network status text on first start
-//        if (utils.isNetworkDeviceTurnedOn(this)) {
-//            binding.networkStatusTextView.text = getString(R.string.internet_up)
-//        } else {
-//            binding.networkStatusTextView.text = getString(R.string.internet_down)
-//        }
-
         val airplaneModeStatus = utils.isAirplaneModeOn(this)
         val vpnStatus = utils.isVpnActive(this)
-        // FIXME: DO NOT USE FOR NOW FOR ANDROID 7
-//        val internetStatus = utils.isNetworkDeviceTurnedOn(this)
 
         Log.d(TAG, " --- Airplane Mode Status: $airplaneModeStatus --- ")
         Log.d(TAG, " --- VPN Status: $vpnStatus --- ")
@@ -364,20 +327,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             Log.d(TAG, " --- Foreground Service: $message --- ")
         }
     }
-
-    /*
-    private fun startSelenForegroundService() {
-        Log.d(TAG, " --- Starting SelenForegroundService --- ")
-        // Start foreground notification service anyway (regardless of the run mode)
-        // This is because the service is needed to keep the app alive
-        // And run on Android 7 will crash if run in foreground only
-        val foregroundIntent = Intent(this, SelenForegroundService::class.java)
-        startService(foregroundIntent)
-        SelenForegroundService.libraryStartedLiveData.observe(this) { message ->
-            Log.d(TAG, " --- Foreground Service: $message --- ")
-        }
-    }
-    */
 
     private fun startPJSUA() {
         Log.d(TAG, " --- Starting PJSUA --- ")
@@ -542,13 +491,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, " --- onDestroy ---")
-        //FIXME: --> UNREGISTER RECEIVER NEEDED?
-//        unregisterReceiver(airplaneModeReceiver)
-//        unregisterReceiver(restartBroadcastReceiver)
         connectivityManager.unregisterNetworkCallback(networkCallback)
         stopPlayingSound()
-        // FIXME: --> maybe it causes the button to not recognize the press first few times after restart
-//        coroutineScope.cancel()
 
         // Unregister PJSUAP install
         try {
@@ -728,8 +672,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 try {
                     val buddy = msg.obj as MyBuddy
                     Log.d(TAG, " +++ handleMessage - Buddy state: ${buddy.statusText} +++ ")
-//                binding.destinationTextView.text =
-//                    "HQ #${Config.DESTINATION_EXT}: Status: ${buddy.statusText}"
 
                     /* Return back Call activity */
                     notifyCallState(currentCall)
@@ -745,8 +687,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 var registrationInfoText = msg.obj as String
                 registrationInfoText += " - ${accCfg!!.idUri}"
                 binding.registrationStatusTextView.text = registrationInfoText
-//                binding.registrationInfotextView.text = registrationInfoText
-//
+
                 if (msg.obj.toString().contains("Registration successful")) {
                     // play 'success' wav file
                     binding.callButton.text = CallButtonTyoe.CALL_HQ
@@ -755,7 +696,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                         isSoundPlayed = true
                     }
                 }
-//
+
                 if (msg.obj.toString().contains("Registration failed")) {
                     // play 'Registration failed' wav file
                     // flash LED
@@ -783,7 +724,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 val prm = CallOpParam()
                 /* Only one call at anytime */
                 if (currentCall != null) {
-                    // TODO: simulate call when busy
                     /*
                     prm.setStatusCode(pjsip_status_code.PJSIP_SC_BUSY_HERE);
                     try {
@@ -850,18 +790,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         }
     }
 
-    //    private fun restartApp() {
-//        val intent = Intent(applicationContext, MainActivity::class.java)
-//        val pendingIntent = PendingIntent.getActivity(
-//            applicationContext,
-//            0,
-//            intent,
-//            PendingIntent.FLAG_UPDATE_CURRENT
-//        )
-//        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-//        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 1000, pendingIntent)
-//        System.exit(0)
-//    }
     private fun restartApp() {
         val intent = Intent(applicationContext, MainActivity::class.java)
         val mPendingIntentId = 123456
@@ -1011,7 +939,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         return data
     }
 
-    suspend fun checkForUpdates() = coroutineScope {
+    private suspend fun checkForUpdates() = coroutineScope {
         Log.d(TAG, "Checking for updates...")
         withContext(Dispatchers.IO) {
             try {
