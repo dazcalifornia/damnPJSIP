@@ -44,12 +44,6 @@ android {
 
 dependencies {
     val appcompat_version = "1.7.0"
-    val acraVersion = "5.11.3"
-
-    implementation("ch.acra:acra-http:$acraVersion")
-    implementation("ch.acra:acra-toast:$acraVersion")
-    implementation("ch.acra:acra-limiter:$acraVersion")
-    implementation("ch.acra:acra-advanced-scheduler:$acraVersion")
 
     kapt("com.google.auto.service:auto-service:1.1.1")
     compileOnly("com.google.auto.service:auto-service-annotations:1.1.1")

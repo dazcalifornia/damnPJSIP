@@ -13,8 +13,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import org.acra.ACRA
-import org.acra.ktx.sendWithAcra
 
 
 class Utils {
@@ -135,7 +133,6 @@ class Utils {
 
     fun simulateCrash() {
         val exception = RuntimeException("This is a crash - simulated")
-        exception.sendWithAcra()
         throw exception
 
 

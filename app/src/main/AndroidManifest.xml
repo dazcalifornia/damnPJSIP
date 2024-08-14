@@ -4,7 +4,7 @@
 
 
     <!-- adb shell pm grant your.package.name android.permission.DUMP -->
-    <!--    <uses-permission android:name="android.permission.INTERNET" />-->
+        <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.GPIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- only granted to system apps -->
