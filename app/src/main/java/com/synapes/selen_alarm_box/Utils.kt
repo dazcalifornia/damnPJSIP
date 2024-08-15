@@ -25,6 +25,7 @@ class Utils {
         const val LED3_GPIO = "/sys/class/gpio/gpio999/value"  // GPIO88 (CN9) --> depends on cn12
 //    const val BUTTON_GPIO = BUTTON_GPIO94 || BUTTON_GPIO110
     }
+
     internal fun isGpioAvailable(): Boolean {
         val gpioList =
             listOf(BUTTON_GPIO94, BUTTON_GPIO110, LED_GPIO, LED2_GPIO, LED3_GPIO)
@@ -134,8 +135,6 @@ class Utils {
     fun simulateCrash() {
         val exception = RuntimeException("This is a crash - simulated")
         throw exception
-
-
 //        throw RuntimeException("This is a crash")
     }
 
@@ -151,6 +150,4 @@ class Utils {
                 || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
                 || "google_sdk" == Build.PRODUCT
     }
-
-
 }

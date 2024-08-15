@@ -18,11 +18,6 @@ import org.pjsip.pjsua2.pjsua_state
 
 class SelenBackgroundService : Service() {
 
-    private val serviceJob = Job()
-
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-
-
     companion object {
         internal val TAG = SelenBackgroundService::class.java.simpleName
         val libraryStartedLiveData = MutableLiveData<String>()
@@ -39,7 +34,6 @@ class SelenBackgroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-//        serviceJob.cancel()
         Log.d(TAG, " --- BACKGROUND SERVICE DESTROYED...")
     }
 }

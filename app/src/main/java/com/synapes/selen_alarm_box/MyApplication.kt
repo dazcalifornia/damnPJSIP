@@ -7,6 +7,5 @@ class MyApplication : Application() {
         super.onCreate()
         Config.initialize(this)
         PreferencesManager.dumpAllPreferences(this)
-
     }
 }

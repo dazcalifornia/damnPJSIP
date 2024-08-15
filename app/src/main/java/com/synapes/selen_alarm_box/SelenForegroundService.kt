@@ -25,8 +25,6 @@ class SelenForegroundService : Service() {
         var libraryStartedLiveData = MutableLiveData<String>()
     }
 
-
-
     override fun onBind(intent: Intent): IBinder {
         throw UnsupportedOperationException("Not yet implemented")
     }
@@ -57,13 +55,11 @@ class SelenForegroundService : Service() {
             notificationBuilder.setChannelId(CHANNEL_ID)
             mNotificationManager.createNotificationChannel(chanel)
         }
-
         return notificationBuilder.build()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
-        Log.d(TAG, " --- FOREGROUND SERVICE STARTED...")
+//        Log.d(TAG, " --- FOREGROUND SERVICE STARTED...")
         val notification = buildNotification()
         startForeground(NOTIFICATION_ID, notification)
 
@@ -77,7 +73,6 @@ class SelenForegroundService : Service() {
         val broadcastIntent = Intent(this, RestartBroadcastReceiver::class.java)
         sendBroadcast(broadcastIntent)
     }
-
 }
 
 
