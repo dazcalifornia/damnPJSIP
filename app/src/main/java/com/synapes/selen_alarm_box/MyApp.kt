@@ -240,7 +240,7 @@ class MyApp {
     /* Maintain reference to log writer to avoid premature cleanup by GC */
     private var logWriter: MyLogWriter? = null
     private val configName = "pjsua2.json"
-    private val SIP_PORT = 6000
+    private val SIP_PORT = Config.SIP_LISTENING_PORT
     private val LOG_LEVEL = 4
 
     @JvmOverloads
@@ -454,8 +454,8 @@ class MyApp {
                 accCfgs[i].writeObject(accs_node)
             }
 
-            Log.d(TAG, " json root: ${json.rootContainer}")
-            Log.d(TAG, " json file: $filename")
+//            Log.d(TAG, " json root: ${json.rootContainer}")
+//            Log.d(TAG, " json file: $filename")
             /* Save file */
             json.saveFile(filename)
         } catch (e: Exception) {
@@ -472,7 +472,7 @@ class MyApp {
     fun handleNetworkChange() {
         try {
             println("Network change detected")
-            Log.d(TAG, "Network change detected")
+//            Log.d(TAG, "Network change detected")
             val changeParam = IpChangeParam()
             ep?.handleIpChange(changeParam)
         } catch (e: Exception) {

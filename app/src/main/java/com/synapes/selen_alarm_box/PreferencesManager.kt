@@ -44,23 +44,6 @@ object PreferencesManager {
         }
         return null
     }
-//
-//    fun saveExtension(context: Context, key: String, value: String) {
-//        val values = android.content.ContentValues().apply {
-//            put("key", key)
-//            put("value", value)
-//        }
-//        try {
-//            context.contentResolver.insert(SharedPrefsProvider.CONTENT_URI, values)
-//        } catch (e: Exception) {
-//            Log.e("PreferencesManager", "Error saving to SharedPreferences", e)
-//        }
-//    }
-//
-//    fun updateExtensions(context: Context, newSelfExt: String, newDestExt: String) {
-//        saveExtension(context, KEY_EXTENSION_NUMBER, newSelfExt)
-//        saveExtension(context, KEY_DESTINATION_NUMBER, newDestExt)
-//    }
 
     fun dumpAllPreferences(context: Context) {
         Log.d(TAG, "Dumping all SharedPreferences:")

@@ -3,11 +3,10 @@ package com.synapes.selen_alarm_box
 import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
-import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.audiofx.AcousticEchoCanceler
@@ -22,18 +21,13 @@ import android.os.Looper
 import android.os.Message
 import android.os.Process
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.lifecycleScope
 import com.synapes.selen_alarm_box.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
-import org.acra.ktx.sendWithAcra
-import org.json.JSONException
-import org.json.JSONObject
 import org.pjsip.pjsua2.AccountConfig
 import org.pjsip.pjsua2.AuthCredInfo
 import org.pjsip.pjsua2.BuddyConfig
@@ -46,9 +40,10 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.system.exitProcess
 
 
-class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Informer {
+class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
     init {
         System.loadLibrary("pjsua2")
     }
@@ -87,12 +82,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         var isActivityRunning: Boolean = false
     }
 
-    // progress dialog to be used when download in process
-    private val progressDialog: ProgressDialog? = null
-
-    // Create a new UpdateApp instance
-    private val update: UpdateApp = UpdateApp(this, this)
-
     suspend fun CoroutineScope.flashLedRapidly() {
         while (isActive) {
             utils.turnOnLed()
@@ -120,7 +109,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e(TAG, "+++ Uncaught exception in thread ${thread.name} +++", throwable)
-            RuntimeException("Uncaught exception in thread ${thread.name}: $throwable").sendWithAcra()
             restartApp()
         }
 
@@ -136,22 +124,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 
         checkPermissions()
 
-
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        // Enable Acoustic Echo Cancellation (AEC)
-        val sessionId = audioManager.generateAudioSessionId()
-        val aec = AcousticEchoCanceler.create(sessionId)
-        if (aec != null && aec.enabled.not()) {
-            Log.d(TAG, " --- AEC enabled ---")
-            aec.enabled = true
-        }
-
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        val percentVolume = (maxVolume * 0.81).toInt()
-        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, percentVolume, 0)
-        audioManager.mode = AudioManager.MODE_NORMAL
-        audioManager.isSpeakerphoneOn = true
-
+        configureAudio()
+        configureMicrophone()
+        configureSpeaker()
 
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -188,9 +163,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         val airplaneModeStatus = utils.isAirplaneModeOn(this)
         val vpnStatus = utils.isVpnActive(this)
 
-        Log.d(TAG, " --- Airplane Mode Status: $airplaneModeStatus --- ")
-        Log.d(TAG, " --- VPN Status: $vpnStatus --- ")
-        Log.d(TAG, " --- Internet Status: $internetStatus --- ")
+//        Log.d(TAG, " --- Airplane Mode Status: $airplaneModeStatus --- ")
+//        Log.d(TAG, " --- VPN Status: $vpnStatus --- ")
+//        Log.d(TAG, " --- Internet Status: $internetStatus --- ")
 
         if (airplaneModeStatus) {
 //            binding.networkStatusTextView.text = "Please disable Airplane Mode"
@@ -214,10 +189,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 coroutineScope.cancel()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in coroutine cancel: $e")
-                RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
             }
         }
-
 
         startSelenForegroundService()
 
@@ -247,7 +220,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 
             RunMode.BACKGROUND -> {
                 configureButtons(mode = RunMode.BACKGROUND)
-
                 val backgroundIntent = Intent(this, SelenBackgroundService::class.java)
                 startService(backgroundIntent)
                 SelenBackgroundService.libraryStartedLiveData.observe(this) { message ->
@@ -271,7 +243,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             }
         }
 
-
         if (Config.DEBUG_MODE) {
             binding.debugButton.setOnClickListener() {
                 utils.simulateCrash()
@@ -281,10 +252,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         }
 
         binding.callButton.setOnClickListener() {
-            if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
+            if (binding.callButton.text == CallButtonType.RE_REGISTER) {
                 forceReRegistration()
             }
-
             if (currentCall == null) {
                 try {
                     val call = MyCall(account, -1)
@@ -294,7 +264,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                     utils.turnOnLed()
                 } catch (e: Exception) {
                     println(e)
-                    RuntimeException("Error in making call: $e").sendWithAcra()
                 }
             } else {
                 try {
@@ -304,19 +273,13 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                     utils.turnOffLed()
                 } catch (e: Exception) {
                     println(e)
-                    RuntimeException("Error in hanging up call: $e").sendWithAcra()
                 }
             }
         }
-
-        lifecycleScope.launch {
-            checkForUpdates()
-        }
-
     }
 
     private fun startSelenForegroundService() {
-        Log.d(TAG, " --- Starting SelenForegroundService --- ")
+//        Log.d(TAG, " --- Starting SelenForegroundService --- ")
         val foregroundIntent = Intent(this, SelenForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(foregroundIntent)
@@ -331,17 +294,15 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
     private fun startPJSUA() {
         Log.d(TAG, " --- Starting PJSUA --- ")
 
-
         // Initialize PJSUA
         app = app ?: MyApp().also {
             try {
                 if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                    Log.d(TAG, " --- Debuggable mode --- Waiting for 3 seconds")
+//                    Log.d(TAG, " --- Debuggable mode --- Waiting for 3 seconds")
                     Thread.sleep(3000)
                 }
             } catch (e: InterruptedException) {
                 Log.e(TAG, "Error in thread sleep: $e")
-                RuntimeException("Error in thread sleep: $e").sendWithAcra()
             }
             it.init(this, filesDir.absolutePath)
         }
@@ -388,7 +349,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         }
     }
 
-
     private suspend fun debounceButton(scope: CoroutineScope) {
         while (scope.isActive) {
             val currentButtonState = if (utils.isButtonPressed()) 0 else 1
@@ -402,7 +362,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             delay(50L) // check button state every 50ms
         }
     }
-
 
     private fun handleButtonState(buttonState: Int) {
         // Button State = 1 -> Button Released
@@ -425,7 +384,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 utils.turnOnLed()
             } catch (e: Exception) {
                 println(e)
-                RuntimeException("Error in making call: $e").sendWithAcra()
             }
         }
 
@@ -444,7 +402,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 if (buttonState == 0) utils.turnOffLed()
             } catch (e: Exception) {
                 println(e)
-                RuntimeException("Error in hanging up call: $e").sendWithAcra()
             }
         }
         // Normal state (button released and no ongoing call) -> turn off led
@@ -457,15 +414,15 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 
     private fun configureButtons(mode: String) {
         if (mode == RunMode.UI) {
-            Log.d(TAG, " --- UI MODE ---")
+//            Log.d(TAG, " --- UI MODE ---")
             "UI Mode".also { binding.runModeStatusText.text = it }
         }
         if (mode == RunMode.BACKGROUND) {
-            Log.d(TAG, " --- BACKGROUND MODE ---")
+//            Log.d(TAG, " --- BACKGROUND MODE ---")
             disableCallButton("BG Mode")
         }
         if (mode == RunMode.FOREGROUND) {
-            Log.d(TAG, " --- FOREGROUND MODE ---")
+//            Log.d(TAG, " --- FOREGROUND MODE ---")
             disableCallButton("FG Mode")
         }
     }
@@ -484,7 +441,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering PJSUA: $e")
-            RuntimeException("RuntimeException - Error unregistering PJSUA - onPause: $e").sendWithAcra()
         }
     }
 
@@ -494,19 +450,21 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         connectivityManager.unregisterNetworkCallback(networkCallback)
         stopPlayingSound()
 
-        // Unregister PJSUAP install
         try {
             // Unregister PJSUA
             account?.setRegistration(false)
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering PJSUA: $e")
-            RuntimeException("Error unregistering PJSUA - onDestroy: $e").sendWithAcra()
         }
 
         // Send 'APP_Restart' broadcast
         val intent = Intent()
         intent.action = "com.synapes.selen_alarm_box.APP_RESTART"
         sendBroadcast(intent)
+
+        // Release MediaPlayer
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     private fun putData(uri: String, status: String?): HashMap<String, String?> {
@@ -523,29 +481,28 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         var msgStr = ""
         msgStr += if (expiration == 0L) "Unregistration" else "Registration"
         msgStr += if (code / 100 == 2) " successful" else " failed: $reason"
-        Log.d(TAG, " ## OBSERVER notifyRegState ## - Registration status: $msgStr +++ ")
+//        Log.d(TAG, " ## OBSERVER notifyRegState ## - Registration status: $msgStr +++ ")
         val msg = handler.obtainMessage(CallMessageType.REG_STATE, msgStr)
         msg.sendToTarget()
     }
 
     override fun notifyIncomingCall(call: MyCall?) {
-        Log.d(
-            TAG,
-            " ## OBSERVER notifyIncomingCall ## - Incoming call: ${call!!.info.remoteUri}"
-        )
+//        Log.d(
+//            TAG,
+//            " ## OBSERVER notifyIncomingCall ## - Incoming call: ${call!!.info.remoteUri}"
+//        )
         val msg = handler.obtainMessage(CallMessageType.INCOMING_CALL, call)
         msg.sendToTarget()
     }
 
     override fun notifyCallState(call: MyCall?) {
-        Log.d(TAG, " ## OBSERVER notifyCallState ## - Call state: ${call?.info?.stateText}")
+//        Log.d(TAG, " ## OBSERVER notifyCallState ## - Call state: ${call?.info?.stateText}")
         if (currentCall == null || call!!.id != currentCall!!.id) return
         var ci: CallInfo? = null
         try {
             ci = call.info
         } catch (e: Exception) {
             e.printStackTrace()
-            RuntimeException("Error in getting call info: $e").sendWithAcra()
         }
         if (ci != null) {
             val msg = handler.obtainMessage(CallMessageType.CALL_STATE, ci)
@@ -554,22 +511,21 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
     }
 
     override fun notifyCallMediaState(call: MyCall?) {
-        Log.d(
-            TAG,
-            " ## OBSERVER notifyCallMediaState ## - Call media state: ${call!!.info.stateText}"
-        )
+//        Log.d(
+//            TAG,
+//            " ## OBSERVER notifyCallMediaState ## - Call media state: ${call!!.info.stateText}"
+//        )
         val msg = handler.obtainMessage(CallMessageType.CALL_MEDIA_STATE, null)
         msg.sendToTarget()
     }
 
     override fun notifyBuddyState(buddy: MyBuddy?) {
         try {
-            Log.d(TAG, " ## OBSERVER notifyBuddyState ## - Buddy state: ${buddy!!.statusText}")
+//            Log.d(TAG, " ## OBSERVER notifyBuddyState ## - Buddy state: ${buddy!!.statusText}")
             val msg = handler.obtainMessage(CallMessageType.BUDDY_STATE, buddy)
             msg.sendToTarget()
         } catch (e: Exception) {
             Log.e(TAG, "Error in notifyBuddyState: $e")
-            RuntimeException("Error in notifyBuddyState: $e").sendWithAcra()
         }
     }
 
@@ -585,7 +541,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in notifyChangeNetwork: $e")
-            RuntimeException("Error in notifyChangeNetwork: $e").sendWithAcra()
         }
     }
 
@@ -617,16 +572,15 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                     currentCall = null
                     utils.turnOffLed()
                     if (account?.isRegistrationActive() == true) {
-                        binding.callButton.text = CallButtonTyoe.CALL_HQ
+                        binding.callButton.text = CallButtonType.CALL_HQ
                         try {
                             coroutineScope.cancel()
                             stopPlayingSound()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error in coroutine cancel: $e")
-                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
-                        binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                        binding.callButton.text = CallButtonType.RE_REGISTER
                         coroutineScope.launch { flashLedRapidly() }
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
@@ -639,31 +593,29 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 )
 
                 if (ci.state in callingStates) {
-                    binding.callButton.text = CallButtonTyoe.CALLING
-
+                    binding.callButton.text = CallButtonType.CALLING
                 }
 
                 if (ci.state == pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED) {
-                    binding.callButton.text = CallButtonTyoe.HANGUP
+                    binding.callButton.text = CallButtonType.HANGUP
                 }
 
                 binding.callStatusTextView.text = ci.stateText
             }
 
             CallMessageType.CALL_MEDIA_STATE -> {
-                Log.d(TAG, " +++ handleMessage - Call media only implementing audio. +++ ")
+//                Log.d(TAG, " +++ handleMessage - Call media only implementing audio. +++ ")
                 return false
             }
 
             CallMessageType.CHANGE_NETWORK -> {
                 val status = msg.obj as String
-                Log.d(TAG, " +++ handleMessage - Network status: $status +++ ")
+//                Log.d(TAG, " +++ handleMessage - Network status: $status +++ ")
 
                 try {
                     app!!.handleNetworkChange()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in handling network change: $e")
-                    RuntimeException("Error in handling network change: $e").sendWithAcra()
                 }
                 binding.networkStatusTextView.text = status
             }
@@ -671,26 +623,25 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             CallMessageType.BUDDY_STATE -> {
                 try {
                     val buddy = msg.obj as MyBuddy
-                    Log.d(TAG, " +++ handleMessage - Buddy state: ${buddy.statusText} +++ ")
+//                    Log.d(TAG, " +++ handleMessage - Buddy state: ${buddy.statusText} +++ ")
 
                     /* Return back Call activity */
                     notifyCallState(currentCall)
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in buddy state: $e")
-                    RuntimeException("Error in buddy state: $e").sendWithAcra()
                 }
             }
 
             CallMessageType.REG_STATE -> {
-                Log.d(TAG, " +++ handleMessage - Registration state: ${msg.obj} +++ ")
+//                Log.d(TAG, " +++ handleMessage - Registration state: ${msg.obj} +++ ")
                 var registrationInfoText = msg.obj as String
                 registrationInfoText += " - ${accCfg!!.idUri}"
                 binding.registrationStatusTextView.text = registrationInfoText
 
                 if (msg.obj.toString().contains("Registration successful")) {
                     // play 'success' wav file
-                    binding.callButton.text = CallButtonTyoe.CALL_HQ
+                    binding.callButton.text = CallButtonType.CALL_HQ
                     if (!isSoundPlayed) {
                         playSuccessSoundOnce()
                         isSoundPlayed = true
@@ -700,18 +651,17 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                 if (msg.obj.toString().contains("Registration failed")) {
                     // play 'Registration failed' wav file
                     // flash LED
-                    binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                    binding.callButton.text = CallButtonType.RE_REGISTER
                     if (account?.isRegistrationActive() == true) {
-                        binding.callButton.text = CallButtonTyoe.CALL_HQ
+                        binding.callButton.text = CallButtonType.CALL_HQ
                         try {
                             coroutineScope.cancel()
                             stopPlayingSound()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error in coroutine cancel: $e")
-                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
-                        binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                        binding.callButton.text = CallButtonType.RE_REGISTER
                         coroutineScope.launch { flashLedRapidly() }
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
@@ -747,7 +697,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
                     } catch (e: Exception) {
                         utils.turnOffLed()
                         Log.e(TAG, " +++ Error in answering call: $e +++ ")
-                        RuntimeException("Error in answering call: $e").sendWithAcra()
                     }
                     currentCall = call
 
@@ -756,7 +705,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
 //                        updateCallState(lastCallInfo)
                     } catch (e: Exception) {
                         println(e)
-                        RuntimeException("Error in updating call state: $e").sendWithAcra()
                     }
                 }
             }
@@ -782,11 +730,10 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
             }
 
             account?.setRegistration(true)
-            binding.callButton.text = CallButtonTyoe.RE_REGISTER
+            binding.callButton.text = CallButtonType.RE_REGISTER
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in force re-registration: $e")
-            RuntimeException("Error in force re-registration: $e").sendWithAcra()
         }
     }
 
@@ -801,7 +748,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         )
         val mgr = applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent)
-        System.exit(0)
+        exitProcess(0)
     }
 
     private fun playSoundInLoop(soundFileType: String) {
@@ -870,7 +817,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         const val CHANGE_NETWORK = 6
     }
 
-    object CallButtonTyoe {
+    object CallButtonType {
         const val RE_REGISTER = "Re-Register"
         const val CALL_HQ = "CALL HQ"
         const val CALLING = "Calling..."
@@ -884,110 +831,87 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver, Infor
         const val RETRY_REGISTER = "retry_register"
     }
 
+    private fun configureAudio() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // Enable Acoustic Echo Cancellation (AEC)
+        val sessionId = audioManager.generateAudioSessionId()
+        val aec = AcousticEchoCanceler.create(sessionId)
+        if (aec != null && !aec.enabled) {
+            aec.enabled = true
+            Log.d(TAG, "Acoustic Echo Canceler enabled")
+        }
+
+        /* -- LAST KNOWN GOOD SETTINGS --
+        // Set optimal volume levels
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.MODE_NORMAL)
+        val optimalVolume = (maxVolume * 0.85).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, optimalVolume, 0)
+        // TODO: TEST SOME MORE COMBO
+        audioManager.mode = AudioManager.MODE_NORMAL
+        audioManager.isSpeakerphoneOn = true
+         */
+
+        // Set optimal volume levels
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.MODE_IN_CALL)
+        val optimalVolume = (maxVolume * 0.9).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, optimalVolume, 0)
+        // TODO: TEST SOME MORE COMBO
+        audioManager.mode = AudioManager.MODE_IN_CALL
+        audioManager.isSpeakerphoneOn = true
+
+        Log.d(TAG, "Audio configured: Volume set to $optimalVolume, AEC enabled")
+    }
+
+    private fun configureMicrophone() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // Check if the microphone is available
+        val micAvailable = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            .any { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
+
+        if (micAvailable) {
+            Log.d(TAG, "Microphone is available")
+        } else {
+            Log.e(TAG, "Microphone is not available")
+        }
+    }
+
+    private fun configureSpeaker() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // Check if the speaker is available
+        val speakerAvailable = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .any { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+
+        if (speakerAvailable) {
+            Log.d(TAG, "Speaker is available")
+        } else {
+            Log.e(TAG, "Speaker is not available")
+        }
+    }
 
     private fun checkPermissions() {
-        // TODO: READ MORE PERMISSIONS
         val permissions = arrayOf(
             Manifest.permission.INTERNET,
-            Manifest.permission.WAKE_LOCK,
-            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS,
             Manifest.permission.ACCESS_WIFI_STATE,
             Manifest.permission.ACCESS_NETWORK_STATE,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS,
+            Manifest.permission.WAKE_LOCK,
+            Manifest.permission.USE_SIP,
             Manifest.permission.CALL_PHONE,
             Manifest.permission.RECEIVE_BOOT_COMPLETED,
             Manifest.permission.FOREGROUND_SERVICE,
             Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
-            Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
             Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK,
+            Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.MANAGE_EXTERNAL_STORAGE
         )
         ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
     }
-
-    @Throws(IOException::class)
-    fun downloadData(strUrl: String?): String {
-        var data = ""
-        if (strUrl == null) {
-            throw IllegalArgumentException("URL cannot be null")
-        }
-        try {
-            val url = URL(strUrl)
-            val connection = url.openConnection() as? HttpURLConnection
-            connection?.setRequestMethod("GET")
-            connection?.connect()
-            val `is` = connection?.inputStream
-            if (`is` == null) {
-                throw IOException("Could not open connection")
-            }
-            val br = BufferedReader(InputStreamReader(`is`))
-            val sb = StringBuffer()
-            var line: String? = ""
-            while (br.readLine().also { line = it } != null) {
-                sb.append(line)
-            }
-            data = sb.toString()
-            br.close()
-            `is`.close()
-        } catch (e: java.lang.Exception) {
-            Log.d(TAG, "downloadData: Error! ", e)
-            throw e
-        }
-        return data
-    }
-
-    private suspend fun checkForUpdates() = coroutineScope {
-        Log.d(TAG, "Checking for updates...")
-        withContext(Dispatchers.IO) {
-            try {
-                val data = downloadData(Config.DROID_SERVER_CHECK_URL)
-                val jsonObject = JSONObject(data)
-                val elements = jsonObject.getJSONArray("elements").getJSONObject(0)
-                val newVersionCode = elements.getString("versionCode").toInt()
-                val info = packageManager.getPackageInfo(packageName, 0)
-
-                Log.d(TAG, "Current version code: ${info.versionCode}")
-                if (info.versionCode < newVersionCode) {
-                    update.updateApp(Config.DROID_SERVER_VERSION_UPDATE_URL)
-                } else {
-                    progressDialog?.dismiss()
-                }
-            } catch (e: IOException) {
-                progressDialog?.dismiss()
-                e.printStackTrace()
-                showNegativeMessage()
-            } catch (e: JSONException) {
-                progressDialog?.dismiss()
-                e.printStackTrace()
-                showNegativeMessage()
-            } catch (e: PackageManager.NameNotFoundException) {
-                progressDialog?.dismiss()
-                e.printStackTrace()
-                showNegativeMessage()
-            }
-        }
-    }
-
-    private fun showNegativeMessage() {
-        runOnUiThread {
-            Toast.makeText(
-                this@MainActivity,
-                "Error in downloading JSON data",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    override fun finished(output: String?) {
-        progressDialog?.dismiss()
-    }
-
-    override fun setPercent(percent: String?) {
-        progressDialog?.setMessage("Downloading " + percent);
-    }
-
-
 }

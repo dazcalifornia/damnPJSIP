@@ -5,8 +5,6 @@ import android.content.Context
 object Config {
     lateinit var appContext: Context
 
-    const val DROID_SERVER_CHECK_URL = "https://droid-update.selen.click/check"
-    const val DROID_SERVER_VERSION_UPDATE_URL = "https://droid-update.selen.click/update"
     const val DEBUG_MODE = false
 
     const val SERVER_ADDRESS = "synapes-pbx-poc-01.online"
