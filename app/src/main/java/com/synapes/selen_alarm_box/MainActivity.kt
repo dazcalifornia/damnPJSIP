@@ -640,6 +640,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                 registrationInfoText += " - ${accCfg!!.idUri}"
                 binding.registrationStatusTextView.text = registrationInfoText
 
+                // Send broadcast when registration state changes
+                val intent = Intent(BroadcastAction.SELEN_VOIP_APP_REGISTRATION_STATE)
+
                 if (msg.obj.toString().contains("Registration successful")) {
                     // play 'success' wav file
                     binding.callButton.text = CallButtonType.CALL_HQ
@@ -647,6 +650,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                         playSuccessSoundOnce()
                         isSoundPlayed = true
                     }
+                    intent.putExtra("message", "Voip Registration successful")
                 }
 
                 if (msg.obj.toString().contains("Registration failed")) {
@@ -666,7 +670,11 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                         coroutineScope.launch { flashLedRapidly() }
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
+
+                    intent.putExtra("message", "Voip Registration failed")
                 }
+
+                sendBroadcast(intent)
             }
 
             CallMessageType.INCOMING_CALL -> {

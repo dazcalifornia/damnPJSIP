@@ -52,6 +52,9 @@ object RunMode {
 
 object BroadcastAction {
     const val APP_RESTART = "com.synapes.selen_alarm_box.APP_RESTART"
+    const val SELEN_VOIP_APP_START = "com.synapes.selen_alarm_box.SELEN_VOIP_APP_START"
+    const val SELEN_VOIP_APP_REGISTRATION_STATE = "com.synapes.selen_alarm_box.SELEN_VOIP_REGISTRATION_STATE"
+
     const val SIP_INIT = "com.synapes.selen_alarm_box.SIP_INIT"
     const val SIP_REGISTER = "com.synapes.selen_alarm_box.SIP_REGISTER"
     const val SIP_UNREGISTER = "com.synapes.selen_alarm_box.SIP_UNREGISTER"

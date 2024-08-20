@@ -93,6 +93,14 @@
                 <action android:name="android.intent.action.AIRPLANE_MODE_CHANGED" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".IntercommunicationBroadcast"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.synapes.selen_alarm_box.SELEN_VOIP_APP_START" />
+                <action android:name="com.synapes.selen_alarm_box.SELEN_VOIP_REGISTRATION_STATE" />
+            </intent-filter>
+        </receiver>
 
         <activity
             android:name=".MainActivity"
