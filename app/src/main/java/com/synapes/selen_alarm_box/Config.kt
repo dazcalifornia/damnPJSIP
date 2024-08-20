@@ -49,3 +49,34 @@ object RunMode {
     const val FOREGROUND = "FOREGROUND"
     const val BACKGROUND = "BACKGROUND"
 }
+
+object BroadcastAction {
+    const val APP_RESTART = "com.synapes.selen_alarm_box.APP_RESTART"
+    const val SIP_INIT = "com.synapes.selen_alarm_box.SIP_INIT"
+    const val SIP_REGISTER = "com.synapes.selen_alarm_box.SIP_REGISTER"
+    const val SIP_UNREGISTER = "com.synapes.selen_alarm_box.SIP_UNREGISTER"
+    const val SIP_CALL = "com.synapes.selen_alarm_box.SIP_CALL"
+    const val SIP_HANGUP = "com.synapes.selen_alarm_box.SIP_HANGUP"
+    const val SIP_INCOMING_CALL = "com.synapes.selen_alarm_box.SIP_INCOMING_CALL"
+    const val SIP_INCOMING_CALL_CANCEL = "com.synapes.selen_alarm_box.SIP_INCOMING_CALL_CANCEL"
+    const val SIP_CALL_CONNECTED = "com.synapes.selen_alarm_box.SIP_CALL_CONNECTED"
+    const val SIP_CALL_DISCONNECTED = "com.synapes.selen_alarm_box.SIP_CALL_DISCONNECTED"
+    const val SIP_CALL_ERROR = "com.synapes.selen_alarm_box.SIP_CALL_ERROR"
+    const val SIP_CALL_INFO = "com.synapes.selen_alarm_box.SIP_CALL_INFO"
+    const val SIP_CALL_INFO_UPDATE = "com.synapes.selen_alarm_box.SIP_CALL_INFO_UPDATE"
+    const val SIP_CALL_INFO_CLEAR = "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR"
+    const val SIP_CALL_INFO_CLEAR_ALL = "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_ALL"
+    const val SIP_CALL_INFO_CLEAR_LAST = "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_LAST"
+    const val SIP_CALL_INFO_CLEAR_FIRST = "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_FIRST"
+    const val SIP_CALL_INFO_CLEAR_BY_INDEX =
+        "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_INDEX"
+    const val SIP_CALL_INFO_CLEAR_BY_CALL_ID =
+        "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_CALL_ID"
+    const val SIP_CALL_INFO_CLEAR_BY_EXT = "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_EXT"
+    const val SIP_CALL_INFO_CLEAR_BY_EXT_AND_CALL_ID =
+        "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_EXT_AND_CALL_ID"
+    const val SIP_CALL_INFO_CLEAR_BY_EXT_AND_INDEX =
+        "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_EXT_AND_INDEX"
+    const val SIP_CALL_INFO_CLEAR_BY_CALL_ID_AND_INDEX =
+        "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_CALL_ID"
+}

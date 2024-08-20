@@ -457,9 +457,10 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
             Log.e(TAG, "Error unregistering PJSUA: $e")
         }
 
-        // Send 'APP_Restart' broadcast
+        // Send 'APP_RESTART' broadcast
         val intent = Intent()
-        intent.action = "com.synapes.selen_alarm_box.APP_RESTART"
+//        intent.action = "com.synapes.selen_alarm_box.APP_RESTART"
+        intent.action = BroadcastAction.APP_RESTART
         sendBroadcast(intent)
 
         // Release MediaPlayer
