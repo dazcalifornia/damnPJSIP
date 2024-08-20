@@ -651,6 +651,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                         isSoundPlayed = true
                     }
                     intent.putExtra("message", "Voip Registration successful")
+                    sendBroadcast(intent)
                 }
 
                 if (msg.obj.toString().contains("Registration failed")) {
@@ -672,9 +673,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                     }
 
                     intent.putExtra("message", "Voip Registration failed")
+                    sendBroadcast(intent)
                 }
 
-                sendBroadcast(intent)
             }
 
             CallMessageType.INCOMING_CALL -> {
