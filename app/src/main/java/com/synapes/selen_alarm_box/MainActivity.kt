@@ -3,8 +3,10 @@ package com.synapes.selen_alarm_box
 import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -26,6 +28,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.synapes.selen_alarm_box.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import org.pjsip.pjsua2.AccountConfig
@@ -101,8 +104,23 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         isActivityRunning = false
     }
 
+    private val localReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == "com.synapes.selen_alarm_box.LOCAL_CALL_HQ") {
+                val destinationNumber = intent.getStringExtra("destination_number")
+                Log.d(TAG, "++++++++ Received broadcast from SelenAlarmBox: $destinationNumber")
+                handleButtonState(0)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Register the local broadcast receiver
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            localReceiver, IntentFilter("com.synapes.selen_alarm_box.LOCAL_CALL_HQ")
+        )
+        Log.d(TAG, "Local broadcast receiver registered")
 
         // Turn off the LED when the app starts
         utils.turnOffLed()
@@ -456,6 +474,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering PJSUA: $e")
         }
+
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(localReceiver)
 
         // Send 'APP_RESTART' broadcast
         val intent = Intent()
