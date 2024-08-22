@@ -99,8 +99,11 @@
             <intent-filter>
                 <action android:name="com.synapes.selen_alarm_box.SELEN_VOIP_APP_START" />
                 <action android:name="com.synapes.selen_alarm_box.SELEN_VOIP_REGISTRATION_STATE" />
+                <action android:name="com.synapes.selen_alarm_box.SELEN_VOIP_CALL_STATE" />
                 <action android:name="com.synapes.selen_alarm_box.SELEN_ALARM_BOX_CALL_HQ" />
                 <action android:name="com.synapes.selen_alarm_box.LOCAL_CALL_HQ" />
+                <action android:name="com.synapes.selen_alarm_box.CHECK_REGISTRATION" />
+                <action android:name="com.synapes.selen_alarm_box.LOCAL_CHECK_REGISTRATION" />
             </intent-filter>
         </receiver>
 

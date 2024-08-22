@@ -53,7 +53,14 @@ object RunMode {
 object BroadcastAction {
     const val APP_RESTART = "com.synapes.selen_alarm_box.APP_RESTART"
     const val SELEN_VOIP_APP_START = "com.synapes.selen_alarm_box.SELEN_VOIP_APP_START"
-    const val SELEN_VOIP_APP_REGISTRATION_STATE = "com.synapes.selen_alarm_box.SELEN_VOIP_REGISTRATION_STATE"
+    const val SELEN_VOIP_APP_REGISTRATION_STATE =
+        "com.synapes.selen_alarm_box.SELEN_VOIP_REGISTRATION_STATE"
+    const val SELEN_VOIP_APP_CALL_STATE = "com.synapes.selen_alarm_box.SELEN_VOIP_CALL_STATE"
+    const val SELEN_VOIP_APP_CALL_HQ = "com.synapes.selen_alarm_box.SELEN_ALARM_BOX_CALL_HQ"
+    const val SELEN_VOIP_APP_CALL_HQ_LOCAL = "com.synapes.selen_alarm_box.LOCAL_CALL_HQ"
+    const val SELEN_VOIP_APP_CHECK_REGISTRATION = "com.synapes.selen_alarm_box.CHECK_REGISTRATION"
+    const val SELEN_VOIP_APP_CHECK_REGISTRATION_LOCAL = "com.synapes.selen_alarm_box.LOCAL_CHECK_REGISTRATION"
+    // NOT USED
 
     const val SIP_INIT = "com.synapes.selen_alarm_box.SIP_INIT"
     const val SIP_REGISTER = "com.synapes.selen_alarm_box.SIP_REGISTER"
@@ -82,4 +89,17 @@ object BroadcastAction {
         "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_EXT_AND_INDEX"
     const val SIP_CALL_INFO_CLEAR_BY_CALL_ID_AND_INDEX =
         "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_CALL_ID"
+}
+
+object BroadcastEventMessage {
+    const val VOIP_APP_IS_STARTING = "VOIP App is starting up"
+    const val VOIP_APP_IS_MAKING_CALL = "VOIP App is making a call"
+    const val VOIP_APP_FAILED_TO_MAKE_CALL = "VOIP App failed to make a call"
+    const val VOIP_APP_HUNG_UP = "VOIP App hung up"
+    const val VOIP_APP_FAILED_TO_HANG_UP = "VOIP App failed to hang up"
+    const val VOIP_APP_REGISTRATION_SUCCESSFUL = "VOIP App registration successful"
+    const val VOIP_APP_REGISTRATION_FAILED = "VOIP App registration failed"
+    const val VOIP_APP_CALL_ANSWERED = "VOIP App call answered"
+    const val VOIP_APP_CALL_DISCONNECTED = "VOIP App call disconnected"
+    const val VOIP_APP_FAILED_TO_ANSWER_CALL = "VOIP App failed to answer call"
 }

@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         while (isActive) {
             utils.turnOnLed()
             delay(100) // delay in milliseconds
+
             utils.turnOffLed()
             delay(100) // delay in milliseconds
         }
@@ -104,9 +105,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         isActivityRunning = false
     }
 
-    private val localReceiver = object : BroadcastReceiver() {
+    private val localReceiverCallHQ = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == "com.synapes.selen_alarm_box.LOCAL_CALL_HQ") {
+            if (intent.action == BroadcastAction.SELEN_VOIP_APP_CALL_HQ_LOCAL) {
                 val destinationNumber = intent.getStringExtra("destination_number")
                 Log.d(TAG, "++++++++ Received broadcast from SelenAlarmBox: $destinationNumber")
                 handleButtonState(0)
@@ -114,13 +115,35 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         }
     }
 
+    private val localReceiverCheckRegistration = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Log.d(TAG, " +++ XXX Received broadcast from SelenAlarmBox: ${intent.action} +++ ")
+            if (intent.action == BroadcastAction.SELEN_VOIP_APP_CHECK_REGISTRATION_LOCAL) {
+                // Check registration status
+                Log.d(TAG, " +++  Received broadcast from SelenAlarmBox: ${intent.action} +++ ")
+                val isRegistered = account?.isRegistrationActive() ?: false
+                val registrationStatus = if (isRegistered) {
+                    BroadcastEventMessage.VOIP_APP_REGISTRATION_SUCCESSFUL
+                } else {
+                    BroadcastEventMessage.VOIP_APP_REGISTRATION_FAILED
+                }
+
+                val statusIntent = Intent(BroadcastAction.SELEN_VOIP_APP_REGISTRATION_STATE)
+                statusIntent.putExtra("message", registrationStatus)
+            }
+
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Register the local broadcast receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(
-            localReceiver, IntentFilter("com.synapes.selen_alarm_box.LOCAL_CALL_HQ")
+            localReceiverCallHQ, IntentFilter(BroadcastAction.SELEN_VOIP_APP_CALL_HQ_LOCAL)
         )
-        Log.d(TAG, "Local broadcast receiver registered")
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            localReceiverCheckRegistration, IntentFilter(BroadcastAction.SELEN_VOIP_APP_CHECK_REGISTRATION_LOCAL)
+        )
 
         // Turn off the LED when the app starts
         utils.turnOffLed()
@@ -269,10 +292,14 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
             binding.debugButton.isEnabled = false
         }
 
+        // On-Screen Call Button
         binding.callButton.setOnClickListener() {
+            val intent = Intent(BroadcastAction.SELEN_VOIP_APP_CALL_STATE)
+
             if (binding.callButton.text == CallButtonType.RE_REGISTER) {
                 forceReRegistration()
             }
+
             if (currentCall == null) {
                 try {
                     val call = MyCall(account, -1)
@@ -280,7 +307,14 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                     call.makeCall(Config.CALL_DST_URI, prm)
                     currentCall = call
                     utils.turnOnLed()
+
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_IS_MAKING_CALL)
+                    sendBroadcast(intent)
                 } catch (e: Exception) {
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_FAILED_TO_MAKE_CALL)
+
+                    sendBroadcast(intent)
+
                     println(e)
                 }
             } else {
@@ -289,7 +323,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                     prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
                     currentCall!!.hangup(prm)
                     utils.turnOffLed()
+
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_HUNG_UP)
+                    sendBroadcast(intent)
                 } catch (e: Exception) {
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_FAILED_TO_HANG_UP)
+                    sendBroadcast(intent)
                     println(e)
                 }
             }
@@ -381,10 +420,13 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
         }
     }
 
+    // Call button hardware
     private fun handleButtonState(buttonState: Int) {
         // Button State = 1 -> Button Released
         // Button State = 0 -> Button Pressed
         // LED ON = 0, LED OFF = 1
+
+        val intent = Intent(BroadcastAction.SELEN_VOIP_APP_CALL_STATE)
 
         // Pressed and no ongoing call -> make call
         if (buttonState == 0 && currentCall == null) {
@@ -400,7 +442,13 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                 // OUTPUT GPIO0 -- GPIO1003
                 // LED ON
                 utils.turnOnLed()
+
+                intent.putExtra("message", BroadcastEventMessage.VOIP_APP_IS_MAKING_CALL)
+                sendBroadcast(intent)
             } catch (e: Exception) {
+                intent.putExtra("message", BroadcastEventMessage.VOIP_APP_FAILED_TO_MAKE_CALL)
+                sendBroadcast(intent)
+
                 println(e)
             }
         }
@@ -418,7 +466,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                 currentCall!!.hangup(prm)
                 // if led is on turn it off
                 if (buttonState == 0) utils.turnOffLed()
+
+                intent.putExtra("message", BroadcastEventMessage.VOIP_APP_HUNG_UP)
+                sendBroadcast(intent)
             } catch (e: Exception) {
+                intent.putExtra("message", BroadcastEventMessage.VOIP_APP_FAILED_TO_HANG_UP)
+                sendBroadcast(intent)
                 println(e)
             }
         }
@@ -475,7 +528,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
             Log.e(TAG, "Error unregistering PJSUA: $e")
         }
 
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(localReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(localReceiverCallHQ)
 
         // Send 'APP_RESTART' broadcast
         val intent = Intent()
@@ -569,6 +622,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
      * Handler Callback
      ******************************************************************************************/
     override fun handleMessage(msg: Message): Boolean {
+        val intent = Intent(BroadcastAction.SELEN_VOIP_APP_CALL_STATE)
+
         when (msg.what) {
             0 -> {
                 app!!.deinit()
@@ -592,6 +647,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                     currentCall!!.delete()
                     currentCall = null
                     utils.turnOffLed()
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_CALL_DISCONNECTED)
+                    sendBroadcast(intent)
                     if (account?.isRegistrationActive() == true) {
                         binding.callButton.text = CallButtonType.CALL_HQ
                         try {
@@ -619,6 +676,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
 
                 if (ci.state == pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED) {
                     binding.callButton.text = CallButtonType.HANGUP
+
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_CALL_ANSWERED)
+                    sendBroadcast(intent)
                 }
 
                 binding.callStatusTextView.text = ci.stateText
@@ -670,7 +730,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                         playSuccessSoundOnce()
                         isSoundPlayed = true
                     }
-                    intent.putExtra("message", "Voip Registration successful")
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_REGISTRATION_SUCCESSFUL)
                     sendBroadcast(intent)
                 }
 
@@ -692,7 +752,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
 
-                    intent.putExtra("message", "Voip Registration failed")
+                    intent.putExtra("message", BroadcastEventMessage.VOIP_APP_REGISTRATION_FAILED)
                     sendBroadcast(intent)
                 }
 
@@ -722,9 +782,15 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver  {
                     prm.statusCode = pjsip_status_code.PJSIP_SC_OK
 
                     try {
+                        intent.putExtra("message", BroadcastEventMessage.VOIP_APP_CALL_ANSWERED)
+                        sendBroadcast(intent)
+
                         call.answer(prm)
                         utils.turnOnLed()
                     } catch (e: Exception) {
+                        intent.putExtra("message", BroadcastEventMessage.VOIP_APP_FAILED_TO_ANSWER_CALL)
+                        sendBroadcast(intent)
+
                         utils.turnOffLed()
                         Log.e(TAG, " +++ Error in answering call: $e +++ ")
                     }
