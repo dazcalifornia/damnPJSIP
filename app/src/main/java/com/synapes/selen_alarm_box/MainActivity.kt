@@ -85,6 +85,10 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private var internetStatus = false
 
+    // Add these at the top of your MainActivity
+    private var registrationDialog: Dialog? = null
+    private var callDialog: Dialog? = null
+
 
     // Singleton instance
     companion object {
@@ -343,12 +347,142 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             binding.debugButton.isEnabled = false
         }
 
-        binding.callButton.setOnClickListener() {
-            if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
-                forceReRegistration()
+//        binding.callButton.setOnClickListener() {
+//            if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
+//                forceReRegistration()
+//            }
+//
+//            if (currentCall == null) {
+//                try {
+//                    val call = MyCall(account, -1)
+//                    val prm = CallOpParam(true)
+//                    call.makeCall(Config.CALL_DST_URI, prm)
+//                    currentCall = call
+//                    utils.turnOnLed()
+//                } catch (e: Exception) {
+//                    println(e)
+////                    RuntimeException("Error in making call: $e").sendWithAcra()
+//                }
+//            } else {
+//                try {
+//                    val prm = CallOpParam()
+//                    prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+//                    currentCall!!.hangup(prm)
+//                    utils.turnOffLed()
+//                } catch (e: Exception) {
+//                    println(e)
+////                    RuntimeException("Error in hanging up call: $e").sendWithAcra()
+//                }
+//            }
+//        }
+
+//        lifecycleScope.launch {
+//            checkForUpdates()
+//        }
+
+            // Modify your call button to show call dialog
+            binding.callButton.setOnClickListener {
+                if (currentCall == null) {
+                    showCallDialog()
+                } else {
+                    try {
+                        val prm = CallOpParam()
+                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                        currentCall!!.hangup(prm)
+                        utils.turnOffLed()
+                    } catch (e: Exception) {
+                        println(e)
+                    }
+                }
             }
 
-            if (currentCall == null) {
+            loginDialogManager = LoginDialogManager(this)
+            // Add click listener for settings button
+            binding.settingsButton.setOnClickListener {
+                showSettingsDialog()
+            }
+
+
+            // Add a register button to your layout and handle it
+            binding.settingsButton.setOnClickListener {
+                showRegistrationDialog()
+            }
+    }
+
+
+    private fun showRegistrationDialog() {
+        registrationDialog = Dialog(this).apply {
+            setContentView(R.layout.registration_dialog)
+            setCancelable(true)
+
+            val username = findViewById<EditText>(R.id.usernameEditText)
+            val password = findViewById<EditText>(R.id.passwordEditText)
+            val registerButton = findViewById<Button>(R.id.registerButton)
+            val cancelButton = findViewById<Button>(R.id.cancelRegButton)
+
+            username.setText(Config.USERNAME)
+            password.setText(Config.PASSWORD)
+
+            registerButton.setOnClickListener {
+                val newUsername = username.text.toString()
+                val newPassword = password.text.toString()
+
+                if (newUsername.isBlank() || newPassword.isBlank()) {
+                    Toast.makeText(this@MainActivity, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                // Update configuration
+                Config.USERNAME = newUsername
+                Config.PASSWORD = newPassword
+                Config.SELF_EXT = newUsername
+                Config.ACC_ID_URI = "sip:${newUsername}@${Config.SERVER_ADDRESS}"
+
+                // Save to preferences
+                PreferencesManager.setSelfExtension(this@MainActivity, newUsername)
+
+                // Force re-registration
+                forceReRegistration()
+
+                dismiss()
+                Toast.makeText(this@MainActivity, "Registration updated", Toast.LENGTH_SHORT).show()
+            }
+
+            cancelButton.setOnClickListener {
+                dismiss()
+            }
+
+            show()
+        }
+    }
+
+    private fun showCallDialog() {
+        callDialog = Dialog(this).apply {
+            setContentView(R.layout.call_dialog)
+            setCancelable(true)
+
+            val destination = findViewById<EditText>(R.id.destinationEditText)
+            val makeCallButton = findViewById<Button>(R.id.makeCallButton)
+            val cancelButton = findViewById<Button>(R.id.cancelCallButton)
+
+            destination.setText(Config.DESTINATION_EXT)
+
+            makeCallButton.setOnClickListener {
+                val destNumber = destination.text.toString()
+
+                if (destNumber.isBlank()) {
+                    Toast.makeText(this@MainActivity, "Please enter destination number", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                // Update config
+                Config.DESTINATION_EXT = destNumber
+                Config.CALL_DST_URI = "sip:${destNumber}@${Config.SERVER_ADDRESS}"
+
+                // Save to preferences
+                PreferencesManager.setDestinationExtension(this@MainActivity, destNumber)
+
+                // Make the call
                 try {
                     val call = MyCall(account, -1)
                     val prm = CallOpParam(true)
@@ -357,32 +491,19 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     utils.turnOnLed()
                 } catch (e: Exception) {
                     println(e)
-//                    RuntimeException("Error in making call: $e").sendWithAcra()
+                    Toast.makeText(this@MainActivity, "Failed to make call", Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                try {
-                    val prm = CallOpParam()
-                    prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                    currentCall!!.hangup(prm)
-                    utils.turnOffLed()
-                } catch (e: Exception) {
-                    println(e)
-//                    RuntimeException("Error in hanging up call: $e").sendWithAcra()
-                }
+
+                dismiss()
             }
+
+            cancelButton.setOnClickListener {
+                dismiss()
+            }
+
+            show()
         }
-
-//        lifecycleScope.launch {
-//            checkForUpdates()
-//        }
-
-            loginDialogManager = LoginDialogManager(this)
-            // Add click listener for settings button
-            binding.settingsButton.setOnClickListener {
-                showSettingsDialog()
-            }
     }
-
 
     private fun showSettingsDialog() {
         val dialog = Dialog(this)
