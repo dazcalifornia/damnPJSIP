@@ -73,6 +73,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private lateinit var loginDialogManager: LoginDialogManager
 
+    private lateinit var viewManager: ViewManager
+
     private var lastButtonState = 0
     private var debounceTime = 100L
 
@@ -153,7 +155,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-        override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
             LocalBroadcastManager.getInstance(this).registerReceiver(
                 localReceiverCheckRegistration,
@@ -169,6 +171,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        viewManager = ViewManager(this)
         enableEdgeToEdge()
         val view = binding.root
         setContentView(view)
@@ -353,308 +357,107 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             binding.debugButton.isEnabled = false
         }
 
-//        binding.callButton.setOnClickListener() {
-//            if (binding.callButton.text == CallButtonTyoe.RE_REGISTER) {
-//                forceReRegistration()
+
+//            // Modify your call button to show call dialog
+//            binding.callButton.setOnClickListener {
+//                if (currentCall == null) {
+//                    showCallDialog()
+//                } else {
+//                    try {
+//                        val prm = CallOpParam()
+//                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+//                        currentCall!!.hangup(prm)
+//                        utils.turnOffLed()
+//                    } catch (e: Exception) {
+//                        println(e)
+//                    }
+//                }
 //            }
 //
-//            if (currentCall == null) {
-//                try {
-//                    val call = MyCall(account, -1)
-//                    val prm = CallOpParam(true)
-//                    call.makeCall(Config.CALL_DST_URI, prm)
-//                    currentCall = call
-//                    utils.turnOnLed()
-//                } catch (e: Exception) {
-//                    println(e)
-////                    RuntimeException("Error in making call: $e").sendWithAcra()
-//                }
-//            } else {
-//                try {
-//                    val prm = CallOpParam()
-//                    prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-//                    currentCall!!.hangup(prm)
-//                    utils.turnOffLed()
-//                } catch (e: Exception) {
-//                    println(e)
-////                    RuntimeException("Error in hanging up call: $e").sendWithAcra()
-//                }
+//            loginDialogManager = LoginDialogManager(this)
+//            // Add click listener for settings button
+//            binding.settingsButton.setOnClickListener {
+//                showSettingsDialog()
 //            }
-//        }
+//
+//
+//            // Add a register button to your layout and handle it
+//            binding.settingsButton.setOnClickListener {
+//                showRegistrationDialog()
+//            }
 
-//        lifecycleScope.launch {
-//            checkForUpdates()
-//        }
 
-            // Modify your call button to show call dialog
-            binding.callButton.setOnClickListener {
-                if (currentCall == null) {
-                    showCallDialog()
-                } else {
-                    try {
-                        val prm = CallOpParam()
-                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                        currentCall!!.hangup(prm)
-                        utils.turnOffLed()
-                    } catch (e: Exception) {
-                        println(e)
+        binding.callButton.setOnClickListener {
+            if (currentCall == null) {
+                viewManager.showCallDialog(
+                    currentDestination = Config.DESTINATION_EXT,
+                    onMakeCall = { destination ->
+                        // Update config
+                        Config.DESTINATION_EXT = destination
+                        Config.CALL_DST_URI = "sip:${destination}@${Config.SERVER_ADDRESS}"
+                        PreferencesManager.setDestinationExtension(this, destination)
+
+                        // Make the call
+                        try {
+                            val call = MyCall(account, -1)
+                            val prm = CallOpParam(true)
+                            call.makeCall(Config.CALL_DST_URI, prm)
+                            currentCall = call
+                            utils.turnOnLed()
+
+                            // Show calling screen
+                            viewManager.showCallingScreen(
+                                number = destination,
+                                onEndCall = {
+                                    try {
+                                        if (currentCall != null) {
+                                            val hangupPrm = CallOpParam()
+                                            hangupPrm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                                            currentCall!!.hangup(hangupPrm)
+                                            utils.turnOffLed()
+                                        }
+                                    } catch (e: Exception) {
+                                        println(e)
+                                    }
+                                }
+                            )
+                        } catch (e: Exception) {
+                            println(e)
+                            Toast.makeText(this, "Failed to make call", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                }
-            }
-
-            loginDialogManager = LoginDialogManager(this)
-            // Add click listener for settings button
-            binding.settingsButton.setOnClickListener {
-                showSettingsDialog()
-            }
-
-
-            // Add a register button to your layout and handle it
-            binding.settingsButton.setOnClickListener {
-                showRegistrationDialog()
-            }
-    }
-
-
-    private fun showCallingScreen(number: String) {
-        callScreen = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
-            setContentView(R.layout.calling_screen)
-            setCancelable(false)
-
-            val callNumberText = findViewById<TextView>(R.id.callNumberText)
-            val callStatusText = findViewById<TextView>(R.id.callStatusText)
-            val callDurationText = findViewById<TextView>(R.id.callDurationText)
-            val endCallButton = findViewById<Button>(R.id.endCallButton)
-
-            callNumberText.text = number
-            callStatusText.text = "Calling..."
-
-            // Start call duration timer
-            callStartTime = System.currentTimeMillis()
-            callDurationHandler = Handler(Looper.getMainLooper())
-
-            val durationRunnable = object : Runnable {
-                override fun run() {
-                    val duration = System.currentTimeMillis() - callStartTime
-                    val seconds = (duration / 1000) % 60
-                    val minutes = (duration / (1000 * 60)) % 60
-                    callDurationText.text = String.format("%02d:%02d", minutes, seconds)
-                    callDurationHandler?.postDelayed(this, 1000)
-                }
-            }
-
-            endCallButton.setOnClickListener {
-                try {
-                    if (currentCall != null) {
-                        val prm = CallOpParam()
-                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                        currentCall!!.hangup(prm)
-                        utils.turnOffLed()
-                    }
-                    dismiss()
-                } catch (e: Exception) {
-                    println(e)
-                }
-            }
-
-            show()
-            callDurationHandler?.postDelayed(durationRunnable, 0)
-        }
-    }
-
-    private fun showIncomingCallScreen(call: MyCall) {
-        incomingCallScreen = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
-            setContentView(R.layout.incoming_screen)
-            setCancelable(false)
-
-            val incomingNumberText = findViewById<TextView>(R.id.incomingNumberText)
-            val answerButton = findViewById<Button>(R.id.answerButton)
-            val declineButton = findViewById<Button>(R.id.declineButton)
-
-            try {
-                val callInfo = call.info
-                incomingNumberText.text = callInfo.remoteUri
-            } catch (e: Exception) {
-                println(e)
-            }
-
-            answerButton.setOnClickListener {
-                try {
-                    val prm = CallOpParam()
-                    prm.statusCode = pjsip_status_code.PJSIP_SC_OK
-                    call.answer(prm)
-                    currentCall = call
-                    utils.turnOnLed()
-                    dismiss()
-
-                    // Show calling screen after answering
-                    showCallingScreen(call.info.remoteUri)
-                } catch (e: Exception) {
-                    println(e)
-                }
-            }
-
-            declineButton.setOnClickListener {
+                )
+            } else {
                 try {
                     val prm = CallOpParam()
                     prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                    call.hangup(prm)
+                    currentCall!!.hangup(prm)
                     utils.turnOffLed()
-                    dismiss()
                 } catch (e: Exception) {
                     println(e)
                 }
             }
-
-            show()
         }
-    }
 
+        binding.settingsButton.setOnClickListener {
+            viewManager.showRegistrationDialog(
+                currentUsername = Config.USERNAME,
+                currentPassword = Config.PASSWORD,
+                onRegister = { username, password ->
+                    // Update configuration
+                    Config.USERNAME = username
+                    Config.PASSWORD = password
+                    Config.SELF_EXT = username
+                    Config.ACC_ID_URI = "sip:${username}@${Config.SERVER_ADDRESS}"
 
-    private fun showRegistrationDialog() {
-        registrationDialog = Dialog(this).apply {
-            setContentView(R.layout.registration_dialog)
-            setCancelable(true)
+                    // Save to preferences
+                    PreferencesManager.setSelfExtension(this, username)
 
-            val username = findViewById<EditText>(R.id.usernameEditText)
-            val password = findViewById<EditText>(R.id.passwordEditText)
-            val registerButton = findViewById<Button>(R.id.registerButton)
-            val cancelButton = findViewById<Button>(R.id.cancelRegButton)
-
-            username.setText(Config.USERNAME)
-            password.setText(Config.PASSWORD)
-
-            registerButton.setOnClickListener {
-                val newUsername = username.text.toString()
-                val newPassword = password.text.toString()
-
-                if (newUsername.isBlank() || newPassword.isBlank()) {
-                    Toast.makeText(this@MainActivity, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+                    // Force re-registration
+                    forceReRegistration()
                 }
-
-                // Update configuration
-                Config.USERNAME = newUsername
-                Config.PASSWORD = newPassword
-                Config.SELF_EXT = newUsername
-                Config.ACC_ID_URI = "sip:${newUsername}@${Config.SERVER_ADDRESS}"
-
-                // Save to preferences
-                PreferencesManager.setSelfExtension(this@MainActivity, newUsername)
-
-                // Force re-registration
-                forceReRegistration()
-
-                dismiss()
-                Toast.makeText(this@MainActivity, "Registration updated", Toast.LENGTH_SHORT).show()
-            }
-
-            cancelButton.setOnClickListener {
-                dismiss()
-            }
-
-            show()
+            )
         }
-    }
-
-    private fun showCallDialog() {
-        callDialog = Dialog(this).apply {
-            setContentView(R.layout.call_dialog)
-            setCancelable(true)
-
-            val destination = findViewById<EditText>(R.id.destinationEditText)
-            val makeCallButton = findViewById<Button>(R.id.makeCallButton)
-            val cancelButton = findViewById<Button>(R.id.cancelCallButton)
-
-            destination.setText(Config.DESTINATION_EXT)
-
-            makeCallButton.setOnClickListener {
-                val destNumber = destination.text.toString()
-                if (destNumber.isBlank()) {
-                    Toast.makeText(this@MainActivity, "Please enter destination number", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-
-                // Update config and make call...
-                try {
-                    val call = MyCall(account, -1)
-                    val prm = CallOpParam(true)
-                    call.makeCall(Config.CALL_DST_URI, prm)
-                    currentCall = call
-                    utils.turnOnLed()
-                    dismiss()
-
-                    // Show calling screen
-                    showCallingScreen(destNumber)
-                } catch (e: Exception) {
-                    println(e)
-                    Toast.makeText(this@MainActivity, "Failed to make call", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            cancelButton.setOnClickListener {
-                dismiss()
-            }
-
-            show()
-        }
-    }
-
-    private fun showSettingsDialog() {
-        val dialog = Dialog(this)
-        dialog.setContentView(R.layout.login_dialog)
-
-        // Get dialog views
-        val selfExtEditText = dialog.findViewById<EditText>(R.id.selfExtEditText)
-        val destExtEditText = dialog.findViewById<EditText>(R.id.destinationExtEditText)
-        val saveButton = dialog.findViewById<Button>(R.id.saveButton)
-        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
-
-        // Set current values
-        selfExtEditText.setText(PreferencesManager.getSelfExtension(this))
-        destExtEditText.setText(PreferencesManager.getDestinationExtension(this))
-
-        // Handle save button
-        saveButton.setOnClickListener {
-            val selfExt = selfExtEditText.text.toString()
-            val destExt = destExtEditText.text.toString()
-
-            if (selfExt.isBlank() || destExt.isBlank()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // Save new values
-            PreferencesManager.setSelfExtension(this, selfExt)
-            PreferencesManager.setDestinationExtension(this, destExt)
-
-            // Update Config
-            Config.SELF_EXT = selfExt
-            Config.DESTINATION_EXT = destExt
-            Config.ACC_ID_URI = "sip:$selfExt@${Config.SERVER_ADDRESS}"
-            Config.CALL_DST_URI = "sip:$destExt@${Config.SERVER_ADDRESS}"
-            Config.USERNAME = selfExt
-            Config.PASSWORD = selfExt
-
-            // Force re-registration with new credentials
-            forceReRegistration()
-
-            // Update UI
-            "${Config.USERNAME} -> ${Config.DESTINATION_EXT}".also {
-                binding.callerTextView.text = it
-            }
-
-            Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
-            dialog.dismiss()
-        }
-
-        // Handle cancel button
-        cancelButton.setOnClickListener {
-            dialog.dismiss()
-        }
-
-        // Show dialog
-        dialog.show()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -771,7 +574,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-
     private suspend fun debounceButton(scope: CoroutineScope) {
         while (scope.isActive) {
             val currentButtonState = if (utils.isButtonPressed()) 0 else 1
@@ -785,7 +587,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             delay(50L) // check button state every 50ms
         }
     }
-
 
     private fun handleButtonState(buttonState: Int) {
         // Button State = 1 -> Button Released
@@ -874,9 +675,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     // Don't forget to cleanup in onDestroy
     override fun onDestroy() {
         super.onDestroy()
-        callDurationHandler?.removeCallbacksAndMessages(null)
-        callScreen?.dismiss()
-        incomingCallScreen?.dismiss()
+        viewManager.dismissAll()
     }
 
     private fun putData(uri: String, status: String?): HashMap<String, String?> {
@@ -901,12 +700,51 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     // Update your existing notifyIncomingCall
     override fun notifyIncomingCall(call: MyCall?) {
         runOnUiThread {
-            showIncomingCallScreen(call!!)
+            try {
+                viewManager.showIncomingCallScreen(
+                    remoteUri = call!!.info.remoteUri,
+                    onAnswer = {
+                        try {
+                            val prm = CallOpParam()
+                            prm.statusCode = pjsip_status_code.PJSIP_SC_OK
+                            call.answer(prm)
+                            currentCall = call
+                            utils.turnOnLed()
+
+                            // Show calling screen
+                            viewManager.showCallingScreen(
+                                number = call.info.remoteUri,
+                                onEndCall = {
+                                    try {
+                                        val hangupPrm = CallOpParam()
+                                        hangupPrm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                                        currentCall!!.hangup(hangupPrm)
+                                        utils.turnOffLed()
+                                    } catch (e: Exception) {
+                                        println(e)
+                                    }
+                                }
+                            )
+                        } catch (e: Exception) {
+                            println(e)
+                        }
+                    },
+                    onDecline = {
+                        try {
+                            val prm = CallOpParam()
+                            prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                            call.hangup(prm)
+                            utils.turnOffLed()
+                        } catch (e: Exception) {
+                            println(e)
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                println(e)
+            }
         }
     }
-
-
-
 
     // Update your existing notifyCallState
     override fun notifyCallState(call: MyCall?) {
@@ -917,18 +755,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             runOnUiThread {
                 when (ci.state) {
                     pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> {
-                        callScreen?.dismiss()
-                        incomingCallScreen?.dismiss()
-                        callDurationHandler?.removeCallbacksAndMessages(null)
+                        viewManager.dismissCallScreens()
                         currentCall = null
                         utils.turnOffLed()
                     }
                     pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED -> {
-                        // Call connected
-                        callScreen?.findViewById<TextView>(R.id.callStatusText)?.text = "Connected"
-                    }
-                    else -> {
-                        // Handle other states if needed
+                        viewManager.updateCallStatus("Connected")
                     }
                 }
             }
@@ -1292,55 +1124,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
     }
 
-    @Throws(IOException::class)
-    fun downloadData(strUrl: String?): String {
-        var data = ""
-        if (strUrl == null) {
-            throw IllegalArgumentException("URL cannot be null")
-        }
-        try {
-            val url = URL(strUrl)
-            val connection = url.openConnection() as? HttpURLConnection
-            connection?.setRequestMethod("GET")
-            connection?.connect()
-            val `is` = connection?.inputStream
-            if (`is` == null) {
-                throw IOException("Could not open connection")
-            }
-            val br = BufferedReader(InputStreamReader(`is`))
-            val sb = StringBuffer()
-            var line: String? = ""
-            while (br.readLine().also { line = it } != null) {
-                sb.append(line)
-            }
-            data = sb.toString()
-            br.close()
-            `is`.close()
-        } catch (e: java.lang.Exception) {
-            Log.d(TAG, "downloadData: Error! ", e)
-            throw e
-        }
-        return data
-    }
-
-
-    private fun showNegativeMessage() {
-        runOnUiThread {
-            Toast.makeText(
-                this@MainActivity,
-                "Error in downloading JSON data",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-//    override fun finished(output: String?) {
-//        progressDialog?.dismiss()
-//    }
-//
-//    override fun setPercent(percent: String?) {
-//        progressDialog?.setMessage("Downloading " + percent);
-//    }
 
 
 }
