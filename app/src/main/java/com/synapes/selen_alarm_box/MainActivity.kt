@@ -2,6 +2,7 @@ package com.synapes.selen_alarm_box
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.Dialog
 import android.app.PendingIntent
 import android.app.ProgressDialog
 import android.content.BroadcastReceiver
@@ -25,6 +26,10 @@ import android.os.Looper
 import android.os.Message
 import android.os.Process
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
+import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -65,6 +70,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
+    private lateinit var loginDialogManager: LoginDialogManager
 
     private var lastButtonState = 0
     private var debounceTime = 100L
@@ -78,6 +84,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private var isSoundPlayed = false
 
     private var internetStatus = false
+
 
     // Singleton instance
     companion object {
@@ -369,6 +376,110 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //            checkForUpdates()
 //        }
 
+            loginDialogManager = LoginDialogManager(this)
+            // Add click listener for settings button
+            binding.settingsButton.setOnClickListener {
+                showSettingsDialog()
+            }
+    }
+
+
+    private fun showSettingsDialog() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.login_dialog)
+
+        // Get dialog views
+        val selfExtEditText = dialog.findViewById<EditText>(R.id.selfExtEditText)
+        val destExtEditText = dialog.findViewById<EditText>(R.id.destinationExtEditText)
+        val saveButton = dialog.findViewById<Button>(R.id.saveButton)
+        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
+
+        // Set current values
+        selfExtEditText.setText(PreferencesManager.getSelfExtension(this))
+        destExtEditText.setText(PreferencesManager.getDestinationExtension(this))
+
+        // Handle save button
+        saveButton.setOnClickListener {
+            val selfExt = selfExtEditText.text.toString()
+            val destExt = destExtEditText.text.toString()
+
+            if (selfExt.isBlank() || destExt.isBlank()) {
+                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Save new values
+            PreferencesManager.setSelfExtension(this, selfExt)
+            PreferencesManager.setDestinationExtension(this, destExt)
+
+            // Update Config
+            Config.SELF_EXT = selfExt
+            Config.DESTINATION_EXT = destExt
+            Config.ACC_ID_URI = "sip:$selfExt@${Config.SERVER_ADDRESS}"
+            Config.CALL_DST_URI = "sip:$destExt@${Config.SERVER_ADDRESS}"
+            Config.USERNAME = selfExt
+            Config.PASSWORD = selfExt
+
+            // Force re-registration with new credentials
+            forceReRegistration()
+
+            // Update UI
+            "${Config.USERNAME} -> ${Config.DESTINATION_EXT}".also {
+                binding.callerTextView.text = it
+            }
+
+            Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+
+        // Handle cancel button
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // Show dialog
+        dialog.show()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_settings -> {
+                showLoginDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun showLoginDialog() {
+        loginDialogManager.showLoginDialog { selfExt, destExt ->
+            // Save the new values
+            PreferencesManager.setSelfExtension(this, selfExt)
+            PreferencesManager.setDestinationExtension(this, destExt)
+
+            // Update Config
+            Config.SELF_EXT = selfExt
+            Config.DESTINATION_EXT = destExt
+            Config.ACC_ID_URI = "sip:$selfExt@${Config.SERVER_ADDRESS}"
+            Config.CALL_DST_URI = "sip:$destExt@${Config.SERVER_ADDRESS}"
+            Config.USERNAME = selfExt
+            Config.PASSWORD = selfExt
+
+            // Force re-registration with new credentials
+            forceReRegistration()
+
+            // Update UI
+            "${Config.USERNAME} -> ${Config.DESTINATION_EXT}".also {
+                binding.callerTextView.text = it
+            }
+
+            Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun startSelenForegroundService() {
@@ -995,37 +1106,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         return data
     }
 
-//    private suspend fun checkForUpdates() = coroutineScope {
-//        Log.d(TAG, "Checking for updates...")
-//        withContext(Dispatchers.IO) {
-//            try {
-//                val data = downloadData(Config.DROID_SERVER_CHECK_URL)
-//                val jsonObject = JSONObject(data)
-//                val elements = jsonObject.getJSONArray("elements").getJSONObject(0)
-//                val newVersionCode = elements.getString("versionCode").toInt()
-//                val info = packageManager.getPackageInfo(packageName, 0)
-//
-//                Log.d(TAG, "Current version code: ${info.versionCode}")
-//                if (info.versionCode < newVersionCode) {
-//                    update.updateApp(Config.DROID_SERVER_VERSION_UPDATE_URL)
-//                } else {
-//                    progressDialog?.dismiss()
-//                }
-//            } catch (e: IOException) {
-//                progressDialog?.dismiss()
-//                e.printStackTrace()
-//                showNegativeMessage()
-//            } catch (e: JSONException) {
-//                progressDialog?.dismiss()
-//                e.printStackTrace()
-//                showNegativeMessage()
-//            } catch (e: PackageManager.NameNotFoundException) {
-//                progressDialog?.dismiss()
-//                e.printStackTrace()
-//                showNegativeMessage()
-//            }
-//        }
-//    }
 
     private fun showNegativeMessage() {
         runOnUiThread {

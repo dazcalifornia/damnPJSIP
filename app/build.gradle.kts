@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
-    kotlin("kapt")
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -44,9 +44,9 @@ android {
 
 dependencies {
     val appcompat_version = "1.7.0"
+    ksp("androidx.room:room-compiler:2.5.0")
 
-    kapt("com.google.auto.service:auto-service:1.1.1")
-    compileOnly("com.google.auto.service:auto-service-annotations:1.1.1")
+    ksp("com.google.auto.service:auto-service:1.1.1")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
