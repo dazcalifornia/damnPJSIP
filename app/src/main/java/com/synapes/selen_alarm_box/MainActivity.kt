@@ -1,6 +1,5 @@
 package com.synapes.selen_alarm_box
 
-import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
 
@@ -9,15 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.media.AudioDeviceInfo
-import android.media.AudioManager
+
 import android.media.MediaPlayer
-import android.media.audiofx.AcousticEchoCanceler
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
+
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -31,7 +24,6 @@ import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -46,8 +38,6 @@ import org.pjsip.pjsua2.CallOpParam
 import org.pjsip.pjsua2.pjsip_inv_state
 import org.pjsip.pjsua2.pjsip_status_code
 
-
-
 class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     init {
         System.loadLibrary("pjsua2")
@@ -57,29 +47,21 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private val handler = Handler(Looper.getMainLooper(), this)
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
-    private val debounceCoroutineScope = CoroutineScope(Dispatchers.Main)
 
-    private lateinit var connectivityManager: ConnectivityManager
-    private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private lateinit var loginDialogManager: LoginDialogManager
-
     private lateinit var viewManager: ViewManager
 
-    private var lastButtonState = 0
-    private var debounceTime = 100L
+    private lateinit var audioManager: AudioSystemManager
+    private lateinit var networkManager: NetworkManager
+    private lateinit var deviceManager: DeviceStatusManager
+    private lateinit var uiManager: UIManager
+    private lateinit var serviceManager: ServiceManager
 
     private val utils = Utils()
-
     private var buddyList: ArrayList<Map<String, String?>> = ArrayList()
-
     private var mediaPlayer: MediaPlayer? = null
-
     private var isSoundPlayed = false
-
     private var internetStatus = false
-
-
-
 
     // Singleton instance
     companion object {
@@ -140,279 +122,27 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-            LocalBroadcastManager.getInstance(this).registerReceiver(
-                localReceiverCheckRegistration,
-                IntentFilter(BroadcastAction.SELEN_VOIP_APP_CHECK_REGISTRATION_LOCAL)
-            )
+        setupBasicUI()
+        setupErrorHandler()
+        initializeManagers()
+        startServices()
+
+        PermissionsHelper.checkAndRequestPermissions(this)
+        startSelenForegroundService()
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            localReceiverCheckRegistration,
+            IntentFilter(BroadcastAction.SELEN_VOIP_APP_CHECK_REGISTRATION_LOCAL)
+        )
         // Turn off the LED when the app starts
         utils.turnOffLed()
 
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e(TAG, "+++ Uncaught exception in thread ${thread.name} +++", throwable)
-//            RuntimeException("Uncaught exception in thread ${thread.name}: $throwable").sendWithAcra()
-            restartApp()
-        }
-
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        viewManager = ViewManager(this)
-        enableEdgeToEdge()
         val view = binding.root
         setContentView(view)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
-        }
-
-//        checkPermissions()
-        PermissionsHelper.checkAndRequestPermissions(this)
-
-
-
-        // Log the current speakerphone status
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        Log.d(TAG, " --- Initial Speakerphone status: ${audioManager.isSpeakerphoneOn} --- ")
-
-        // Check if the app has MODIFY_AUDIO_SETTINGS permission
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.MODIFY_AUDIO_SETTINGS) != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, " --- MODIFY_AUDIO_SETTINGS permission not granted --- ")
-            return
-        }
-
-        // Enable Acoustic Echo Cancellation (AEC)
-        val sessionId = audioManager.generateAudioSessionId()
-        val aec = AcousticEchoCanceler.create(sessionId)
-        Log.d(TAG, " --- AEC: $aec --- ")
-        if (aec != null && aec.enabled.not()) {
-            Log.d(TAG, " --- AEC enabled ---")
-            aec.enabled = true
-        }
-
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        val percentVolume = (maxVolume * 0.81).toInt()
-
-        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, percentVolume, 0)
-//        audioManager.mode = AudioManager.MODE_NORMAL
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val audioDeviceInfo = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-            if (audioDeviceInfo != null) {
-                audioManager.setCommunicationDevice(audioDeviceInfo)
-                Log.d(TAG, " --- Speakerphone set using setCommunicationDevice --- ")
-            } else {
-                Log.e(TAG, " --- Built-in speaker not found --- ")
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.isSpeakerphoneOn = true
-            Log.d(TAG, " --- Speakerphone set using deprecated method --- ")
-        }
-
-        // Log the final speakerphone status
-        Log.d(TAG, " --- Final Speakerphone status: ${audioManager.isSpeakerphoneOn} --- ")
-
-
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        val networkRequest =
-            NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED).build()
-
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                Log.d(" --NetworkCallback --", " ***** Internet available ***** ")
-                notifyChangeNetwork("Internet OK")
-                internetStatus = true
-            }
-
-            override fun onLost(network: Network) {
-                Log.d(" -- NetworkCallback", " ***** No internet connection ******")
-
-                internetStatus = false
-                notifyChangeNetwork("No Internet")
-                coroutineScope.launch {
-                    flashLedRapidly()
-                }
-                playSoundInLoop(SoundType.NO_INTERNET)
-            }
-
-        }
-
-        connectivityManager.registerNetworkCallback(
-            networkRequest, networkCallback
-        )
-
-        // END NETWORK REGISTRATION CALLBACK
-
-        val airplaneModeStatus = utils.isAirplaneModeOn(this)
-        val vpnStatus = utils.isVpnActive(this)
-
-//        Log.d(TAG, " --- Airplane Mode Status: $airplaneModeStatus --- ")
-//        Log.d(TAG, " --- VPN Status: $vpnStatus --- ")
-//        Log.d(TAG, " --- Internet Status: $internetStatus --- ")
-
-        if (airplaneModeStatus) {
-//            binding.networkStatusTextView.text = "Please disable Airplane Mode"
-            disableCallButton("Airplane On")
-            coroutineScope.launch {
-                flashLedRapidly()
-            }
-            playSoundInLoop(SoundType.AIRPLANE_MODE)
-            return
-        } else if (!vpnStatus) {
-            disableCallButton("VPN is not active")
-            coroutineScope.launch {
-                flashLedRapidly()
-            }
-            playSoundInLoop(SoundType.NO_VPN)
-            return
-        } else {
-            stopPlayingSound()
-            // cancel flashing LED
-            try {
-                coroutineScope.cancel()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in coroutine cancel: $e")
-//                RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
-            }
-        }
-
-
-        startSelenForegroundService()
-
-        if (!vpnStatus || airplaneModeStatus || !internetStatus) {
-            Log.d(
-                TAG,
-                " --- VPN is not active, or device is in airplane mode, or internet is not available. Not starting PJSUA. --- "
-            )
-        } else {
-            startPJSUA()
-        }
-
-        // leave this one for ui hardware
-        /* Setup Hardware Call button */
-        if (utils.isGpioAvailable()) {
-            debounceCoroutineScope.launch {
-                debounceButton(this)
-            }
-        }
-
-        "${Config.USERNAME} -> ${Config.DESTINATION_EXT}".also { binding.callerTextView.text = it }
-
-        when (Config.APP_RUN_MODE) {
-            RunMode.UI -> {
-                configureButtons(mode = RunMode.UI)
-            }
-
-            RunMode.BACKGROUND -> {
-                configureButtons(mode = RunMode.BACKGROUND)
-
-                val backgroundIntent = Intent(this, SelenBackgroundService::class.java)
-                startService(backgroundIntent)
-                SelenBackgroundService.libraryStartedLiveData.observe(this) { message ->
-                    binding.runModeStatusText.text = message
-                }
-            }
-
-            RunMode.FOREGROUND -> {
-                configureButtons(mode = RunMode.FOREGROUND)
-
-                val foregroundIntent = Intent(this, SelenForegroundService::class.java)
-                startService(foregroundIntent)
-                SelenForegroundService.libraryStartedLiveData.observe(this) { message ->
-                    binding.runModeStatusText.text = message
-                }
-            }
-
-            else -> {
-                // Handle other cases
-                Log.e(TAG, " --- SHOULD NOT BE HERE ---")
-            }
-        }
-
-
-        if (Config.DEBUG_MODE) {
-            binding.debugButton.setOnClickListener() {
-                utils.simulateCrash()
-            }
-        } else {
-            binding.debugButton.isEnabled = false
-        }
-
-
-        binding.callButton.setOnClickListener {
-            if (currentCall == null) {
-                viewManager.showCallDialog(
-                    currentDestination = Config.DESTINATION_EXT,
-                    onMakeCall = { destination ->
-                        // Update config
-                        Config.DESTINATION_EXT = destination
-                        Config.CALL_DST_URI = "sip:${destination}@${Config.SERVER_ADDRESS}"
-                        PreferencesManager.setDestinationExtension(this, destination)
-
-                        // Make the call
-                        try {
-                            val call = MyCall(account, -1)
-                            val prm = CallOpParam(true)
-                            call.makeCall(Config.CALL_DST_URI, prm)
-                            currentCall = call
-                            utils.turnOnLed()
-
-                            // Show calling screen
-                            viewManager.showCallingScreen(
-                                number = destination,
-                                onEndCall = {
-                                    try {
-                                        if (currentCall != null) {
-                                            val hangupPrm = CallOpParam()
-                                            hangupPrm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                                            currentCall!!.hangup(hangupPrm)
-                                            utils.turnOffLed()
-                                        }
-                                    } catch (e: Exception) {
-                                        println(e)
-                                    }
-                                }
-                            )
-                        } catch (e: Exception) {
-                            println(e)
-                            Toast.makeText(this, "Failed to make call", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            } else {
-                try {
-                    val prm = CallOpParam()
-                    prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                    currentCall!!.hangup(prm)
-                    utils.turnOffLed()
-                } catch (e: Exception) {
-                    println(e)
-                }
-            }
-        }
-
-        binding.settingsButton.setOnClickListener {
-            viewManager.showRegistrationDialog(
-                currentUsername = Config.USERNAME,
-                currentPassword = Config.PASSWORD,
-                onRegister = { username, password ->
-                    // Update configuration
-                    Config.USERNAME = username
-                    Config.PASSWORD = password
-                    Config.SELF_EXT = username
-                    Config.ACC_ID_URI = "sip:${username}@${Config.SERVER_ADDRESS}"
-
-                    // Save to preferences
-                    PreferencesManager.setSelfExtension(this, username)
-
-                    // Force re-registration
-                    forceReRegistration()
-                }
-            )
         }
     }
 
@@ -541,20 +271,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-    private suspend fun debounceButton(scope: CoroutineScope) {
-        while (scope.isActive) {
-            val currentButtonState = if (utils.isButtonPressed()) 0 else 1
-            if (currentButtonState != lastButtonState) {
-                delay(debounceTime)
-                if (currentButtonState == if (utils.isButtonPressed()) 0 else 1) {
-                    lastButtonState = currentButtonState
-                    handleButtonState(currentButtonState)
-                }
-            }
-            delay(50L) // check button state every 50ms
-        }
-    }
-
     private fun handleButtonState(buttonState: Int) {
         // Button State = 1 -> Button Released
         // Button State = 0 -> Button Pressed
@@ -606,20 +322,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-    private fun configureButtons(mode: String) {
-        if (mode == RunMode.UI) {
-            Log.d(TAG, " --- UI MODE ---")
-            "UI Mode".also { binding.runModeStatusText.text = it }
-        }
-        if (mode == RunMode.BACKGROUND) {
-            Log.d(TAG, " --- BACKGROUND MODE ---")
-            disableCallButton("BG Mode")
-        }
-        if (mode == RunMode.FOREGROUND) {
-            Log.d(TAG, " --- FOREGROUND MODE ---")
-            disableCallButton("FG Mode")
-        }
-    }
 
     private fun disableCallButton(runModeText: String) {
         binding.callButton.isEnabled = false
@@ -642,7 +344,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     // Don't forget to cleanup in onDestroy
     override fun onDestroy() {
         super.onDestroy()
-        viewManager.dismissAll()
+        networkManager.cleanup()
+        coroutineScope.cancel()
     }
 
     private fun putData(uri: String, status: String?): HashMap<String, String?> {
@@ -766,6 +469,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 val msg = handler.obtainMessage(CallMessageType.CHANGE_NETWORK, status)
                 msg.sendToTarget()
             }
+            runOnUiThread {
+                binding.networkStatusTextView.text = status
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error in notifyChangeNetwork: $e")
 //            RuntimeException("Error in notifyChangeNetwork: $e").sendWithAcra()
@@ -843,7 +549,16 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 Log.d(TAG, " +++ handleMessage - Network status: $status +++ ")
 
                 try {
-                    app!!.handleNetworkChange()
+//                    app!!.handleNetworkChange()
+                    if (app != null) {
+                        app!!.handleNetworkChange()
+                        Log.d(TAG, "Network change handled successfully")
+                    } else {
+                        Log.d(TAG, "App is null, attempting to initialize PJSUA")
+                        if (!utils.isAirplaneModeOn(this) && utils.isVpnActive(this)) {
+                            startPJSUA()
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in handling network change: $e")
 //                    RuntimeException("Error in handling network change: $e").sendWithAcra()
@@ -1045,8 +760,162 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     }
 
 
+//    before that
+private fun setupBasicUI() {
+    binding = ActivityMainBinding.inflate(layoutInflater)
+    setContentView(binding.root)
+    viewManager = ViewManager(this)
+    enableEdgeToEdge()
+    setupWindowInsets()
+    utils.turnOffLed()
+}
 
+    private fun setupErrorHandler() {
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e(TAG, "Uncaught exception in thread ${thread.name}", throwable)
+            restartApp()
+        }
+    }
 
+    private fun initializeManagers() {
+        // Initialize managers
+        audioManager = AudioSystemManager(this)
 
+        networkManager = NetworkManager(
+            context = this,
+            onNetworkAvailable = { handleNetworkAvailable() },
+            onNetworkLost = { handleNetworkLost() }
+        )
+
+        deviceManager = DeviceStatusManager(
+            context = this,
+            utils = utils,
+            networkManager = networkManager,
+            onAirplaneMode = { handleAirplaneMode() },
+            onNoVPN = { handleNoVPN() },
+            onNoInternet = { handleNoInternet() },
+            onNormalState = { handleNormalState() }
+        )
+
+        uiManager = UIManager(this, binding, viewManager)
+
+        // Setup systems
+        PermissionsHelper.checkAndRequestPermissions(this)
+        audioManager.setupAudioSystem()
+        networkManager.setupNetworkMonitoring()
+
+        if (deviceManager.checkDeviceStatus()) {
+            startPJSUA()
+        }
+
+        uiManager.setupUIComponents(
+            onMakeCall = { destination -> handleMakeCall(destination) },
+            onEndCall = { handleEndCall() },
+            onRegister = { username, password -> handleRegistration(username, password) }
+        )
+        serviceManager = ServiceManager(
+            context = this,
+            onServiceMessage = { message ->
+                binding.runModeStatusText.text = message
+            }
+        )
+    }
+
+    private fun startServices() {
+        serviceManager.startServices()
+    }
+
+//    new Things
+
+    private fun setupWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+    }
+    private fun handleNetworkAvailable() {
+        Log.d(TAG, " ***** Internet available ***** ")
+        notifyChangeNetwork("Internet OK")
+        internetStatus = true
+    }
+    private fun handleNetworkLost() {
+        Log.d(TAG, " ***** No internet connection ******")
+        internetStatus = false
+        notifyChangeNetwork("No Internet")
+        coroutineScope.launch { flashLedRapidly() }
+        playSoundInLoop(SoundType.NO_INTERNET)
+    }
+    private fun handleNoInternet() {
+        disableCallButton("No Internet")
+        coroutineScope.launch { flashLedRapidly() }
+        playSoundInLoop(SoundType.NO_INTERNET)
+    }
+    private fun handleAirplaneMode() {
+        disableCallButton("Airplane On")
+        coroutineScope.launch { flashLedRapidly() }
+        playSoundInLoop(SoundType.AIRPLANE_MODE)
+    }
+    private fun handleNoVPN() {
+        disableCallButton("VPN is not active")
+        coroutineScope.launch { flashLedRapidly() }
+        playSoundInLoop(SoundType.NO_VPN)
+    }
+    private fun handleNormalState() {
+        stopPlayingSound()
+        try {
+            coroutineScope.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in coroutine cancel: $e")
+        }
+    }
+    private fun handleMakeCall(destination: String) {
+        // Update config
+        Config.DESTINATION_EXT = destination
+        Config.CALL_DST_URI = "sip:${destination}@${Config.SERVER_ADDRESS}"
+        PreferencesManager.setDestinationExtension(this, destination)
+
+        try {
+            val call = MyCall(account, -1)
+            val prm = CallOpParam(true)
+            call.makeCall(Config.CALL_DST_URI, prm)
+            currentCall = call
+            utils.turnOnLed()
+
+            // Show calling screen
+            viewManager.showCallingScreen(
+                number = destination,
+                onEndCall = { handleEndCall() }
+            )
+        } catch (e: Exception) {
+            println(e)
+            Toast.makeText(this, "Failed to make call", Toast.LENGTH_SHORT).show()
+        }
+    }
+    private fun handleEndCall() {
+        try {
+            if (currentCall != null) {
+                val hangupPrm = CallOpParam()
+                hangupPrm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                currentCall!!.hangup(hangupPrm)
+                utils.turnOffLed()
+            }
+        } catch (e: Exception) {
+            println(e)
+        }
+    }
+    private fun handleRegistration(username: String, password: String) {
+        // Update configuration
+        Config.USERNAME = username
+        Config.PASSWORD = password
+        Config.SELF_EXT = username
+        Config.ACC_ID_URI = "sip:${username}@${Config.SERVER_ADDRESS}"
+
+        // Save to preferences
+        PreferencesManager.setSelfExtension(this, username)
+
+        // Force re-registration
+        forceReRegistration()
+    }
 
 }

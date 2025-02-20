@@ -481,6 +481,7 @@ class MyApp {
         }
     }
 
+
     fun isLibraryStarted(): Boolean {
         try {
             if (ep!!.libGetState() == pjsua_state.PJSUA_STATE_RUNNING) return true
