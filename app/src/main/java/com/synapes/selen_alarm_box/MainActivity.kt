@@ -30,6 +30,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -88,6 +89,11 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     // Add these at the top of your MainActivity
     private var registrationDialog: Dialog? = null
     private var callDialog: Dialog? = null
+
+    private var callScreen: Dialog? = null
+    private var incomingCallScreen: Dialog? = null
+    private var callDurationHandler: Handler? = null
+    private var callStartTime: Long = 0
 
 
     // Singleton instance
@@ -410,6 +416,101 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     }
 
 
+    private fun showCallingScreen(number: String) {
+        callScreen = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
+            setContentView(R.layout.calling_screen)
+            setCancelable(false)
+
+            val callNumberText = findViewById<TextView>(R.id.callNumberText)
+            val callStatusText = findViewById<TextView>(R.id.callStatusText)
+            val callDurationText = findViewById<TextView>(R.id.callDurationText)
+            val endCallButton = findViewById<Button>(R.id.endCallButton)
+
+            callNumberText.text = number
+            callStatusText.text = "Calling..."
+
+            // Start call duration timer
+            callStartTime = System.currentTimeMillis()
+            callDurationHandler = Handler(Looper.getMainLooper())
+
+            val durationRunnable = object : Runnable {
+                override fun run() {
+                    val duration = System.currentTimeMillis() - callStartTime
+                    val seconds = (duration / 1000) % 60
+                    val minutes = (duration / (1000 * 60)) % 60
+                    callDurationText.text = String.format("%02d:%02d", minutes, seconds)
+                    callDurationHandler?.postDelayed(this, 1000)
+                }
+            }
+
+            endCallButton.setOnClickListener {
+                try {
+                    if (currentCall != null) {
+                        val prm = CallOpParam()
+                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                        currentCall!!.hangup(prm)
+                        utils.turnOffLed()
+                    }
+                    dismiss()
+                } catch (e: Exception) {
+                    println(e)
+                }
+            }
+
+            show()
+            callDurationHandler?.postDelayed(durationRunnable, 0)
+        }
+    }
+
+    private fun showIncomingCallScreen(call: MyCall) {
+        incomingCallScreen = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
+            setContentView(R.layout.incoming_screen)
+            setCancelable(false)
+
+            val incomingNumberText = findViewById<TextView>(R.id.incomingNumberText)
+            val answerButton = findViewById<Button>(R.id.answerButton)
+            val declineButton = findViewById<Button>(R.id.declineButton)
+
+            try {
+                val callInfo = call.info
+                incomingNumberText.text = callInfo.remoteUri
+            } catch (e: Exception) {
+                println(e)
+            }
+
+            answerButton.setOnClickListener {
+                try {
+                    val prm = CallOpParam()
+                    prm.statusCode = pjsip_status_code.PJSIP_SC_OK
+                    call.answer(prm)
+                    currentCall = call
+                    utils.turnOnLed()
+                    dismiss()
+
+                    // Show calling screen after answering
+                    showCallingScreen(call.info.remoteUri)
+                } catch (e: Exception) {
+                    println(e)
+                }
+            }
+
+            declineButton.setOnClickListener {
+                try {
+                    val prm = CallOpParam()
+                    prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
+                    call.hangup(prm)
+                    utils.turnOffLed()
+                    dismiss()
+                } catch (e: Exception) {
+                    println(e)
+                }
+            }
+
+            show()
+        }
+    }
+
+
     private fun showRegistrationDialog() {
         registrationDialog = Dialog(this).apply {
             setContentView(R.layout.registration_dialog)
@@ -469,32 +570,26 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
             makeCallButton.setOnClickListener {
                 val destNumber = destination.text.toString()
-
                 if (destNumber.isBlank()) {
                     Toast.makeText(this@MainActivity, "Please enter destination number", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
 
-                // Update config
-                Config.DESTINATION_EXT = destNumber
-                Config.CALL_DST_URI = "sip:${destNumber}@${Config.SERVER_ADDRESS}"
-
-                // Save to preferences
-                PreferencesManager.setDestinationExtension(this@MainActivity, destNumber)
-
-                // Make the call
+                // Update config and make call...
                 try {
                     val call = MyCall(account, -1)
                     val prm = CallOpParam(true)
                     call.makeCall(Config.CALL_DST_URI, prm)
                     currentCall = call
                     utils.turnOnLed()
+                    dismiss()
+
+                    // Show calling screen
+                    showCallingScreen(destNumber)
                 } catch (e: Exception) {
                     println(e)
                     Toast.makeText(this@MainActivity, "Failed to make call", Toast.LENGTH_SHORT).show()
                 }
-
-                dismiss()
             }
 
             cancelButton.setOnClickListener {
@@ -776,25 +871,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
+    // Don't forget to cleanup in onDestroy
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, " --- onDestroy ---")
-        connectivityManager.unregisterNetworkCallback(networkCallback)
-        stopPlayingSound()
-
-        // Unregister PJSUAP install
-        try {
-            // Unregister PJSUA
-            account?.setRegistration(false)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering PJSUA: $e")
-//            RuntimeException("Error unregistering PJSUA - onDestroy: $e").sendWithAcra()
-        }
-
-        // Send 'APP_Restart' broadcast
-        val intent = Intent()
-        intent.action = "com.synapes.selen_alarm_box.APP_RESTART"
-        sendBroadcast(intent)
+        callDurationHandler?.removeCallbacksAndMessages(null)
+        callScreen?.dismiss()
+        incomingCallScreen?.dismiss()
     }
 
     private fun putData(uri: String, status: String?): HashMap<String, String?> {
@@ -816,28 +898,42 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         msg.sendToTarget()
     }
 
+    // Update your existing notifyIncomingCall
     override fun notifyIncomingCall(call: MyCall?) {
-        Log.d(
-            TAG,
-            " ## OBSERVER notifyIncomingCall ## - Incoming call: ${call!!.info.remoteUri}"
-        )
-        val msg = handler.obtainMessage(CallMessageType.INCOMING_CALL, call)
-        msg.sendToTarget()
+        runOnUiThread {
+            showIncomingCallScreen(call!!)
+        }
     }
 
+
+
+
+    // Update your existing notifyCallState
     override fun notifyCallState(call: MyCall?) {
-        Log.d(TAG, " ## OBSERVER notifyCallState ## - Call state: ${call?.info?.stateText}")
         if (currentCall == null || call!!.id != currentCall!!.id) return
-        var ci: CallInfo? = null
+
         try {
-            ci = call.info
+            val ci = call.info
+            runOnUiThread {
+                when (ci.state) {
+                    pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> {
+                        callScreen?.dismiss()
+                        incomingCallScreen?.dismiss()
+                        callDurationHandler?.removeCallbacksAndMessages(null)
+                        currentCall = null
+                        utils.turnOffLed()
+                    }
+                    pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED -> {
+                        // Call connected
+                        callScreen?.findViewById<TextView>(R.id.callStatusText)?.text = "Connected"
+                    }
+                    else -> {
+                        // Handle other states if needed
+                    }
+                }
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
-//            RuntimeException("Error in getting call info: $e").sendWithAcra()
-        }
-        if (ci != null) {
-            val msg = handler.obtainMessage(CallMessageType.CALL_STATE, ci)
-            msg.sendToTarget()
+            println(e)
         }
     }
 
