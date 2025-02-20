@@ -44,11 +44,11 @@ object Config {
 
 }
 
-object RunMode {
-    const val UI = "UI"
-    const val FOREGROUND = "FOREGROUND"
-    const val BACKGROUND = "BACKGROUND"
-}
+//object RunMode {
+//    const val UI = "UI"
+//    const val FOREGROUND = "FOREGROUND"
+//    const val BACKGROUND = "BACKGROUND"
+//}
 
 object BroadcastAction {
     const val APP_RESTART = "com.synapes.selen_alarm_box.APP_RESTART"
@@ -91,15 +91,15 @@ object BroadcastAction {
         "com.synapes.selen_alarm_box.SIP_CALL_INFO_CLEAR_BY_CALL_ID"
 }
 
-object BroadcastEventMessage {
-    const val VOIP_APP_IS_STARTING = "VOIP App is starting up"
-    const val VOIP_APP_IS_MAKING_CALL = "VOIP App is making a call"
-    const val VOIP_APP_FAILED_TO_MAKE_CALL = "VOIP App failed to make a call"
-    const val VOIP_APP_HUNG_UP = "VOIP App hung up"
-    const val VOIP_APP_FAILED_TO_HANG_UP = "VOIP App failed to hang up"
-    const val VOIP_APP_REGISTRATION_SUCCESSFUL = "VOIP App registration successful"
-    const val VOIP_APP_REGISTRATION_FAILED = "VOIP App registration failed"
-    const val VOIP_APP_CALL_ANSWERED = "VOIP App call answered"
-    const val VOIP_APP_CALL_DISCONNECTED = "VOIP App call disconnected"
-    const val VOIP_APP_FAILED_TO_ANSWER_CALL = "VOIP App failed to answer call"
-}
+//object BroadcastEventMessage {
+//    const val VOIP_APP_IS_STARTING = "VOIP App is starting up"
+//    const val VOIP_APP_IS_MAKING_CALL = "VOIP App is making a call"
+//    const val VOIP_APP_FAILED_TO_MAKE_CALL = "VOIP App failed to make a call"
+//    const val VOIP_APP_HUNG_UP = "VOIP App hung up"
+//    const val VOIP_APP_FAILED_TO_HANG_UP = "VOIP App failed to hang up"
+//    const val VOIP_APP_REGISTRATION_SUCCESSFUL = "VOIP App registration successful"
+//    const val VOIP_APP_REGISTRATION_FAILED = "VOIP App registration failed"
+//    const val VOIP_APP_CALL_ANSWERED = "VOIP App call answered"
+//    const val VOIP_APP_CALL_DISCONNECTED = "VOIP App call disconnected"
+//    const val VOIP_APP_FAILED_TO_ANSWER_CALL = "VOIP App failed to answer call"
+//}

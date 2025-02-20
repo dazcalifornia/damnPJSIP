@@ -2,9 +2,8 @@ package com.synapes.selen_alarm_box
 
 import android.Manifest
 import android.app.AlarmManager
-import android.app.Dialog
 import android.app.PendingIntent
-import android.app.ProgressDialog
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -28,22 +27,17 @@ import android.os.Process
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
+
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.synapes.selen_alarm_box.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
-//import org.acra.ktx.sendWithAcra
-import org.json.JSONException
-import org.json.JSONObject
+
 import org.pjsip.pjsua2.AccountConfig
 import org.pjsip.pjsua2.AuthCredInfo
 import org.pjsip.pjsua2.BuddyConfig
@@ -51,11 +45,7 @@ import org.pjsip.pjsua2.CallInfo
 import org.pjsip.pjsua2.CallOpParam
 import org.pjsip.pjsua2.pjsip_inv_state
 import org.pjsip.pjsua2.pjsip_status_code
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
+
 
 
 class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
@@ -88,14 +78,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private var internetStatus = false
 
-    // Add these at the top of your MainActivity
-    private var registrationDialog: Dialog? = null
-    private var callDialog: Dialog? = null
 
-    private var callScreen: Dialog? = null
-    private var incomingCallScreen: Dialog? = null
-    private var callDurationHandler: Handler? = null
-    private var callStartTime: Long = 0
 
 
     // Singleton instance
@@ -182,7 +165,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             insets
         }
 
-        checkPermissions()
+//        checkPermissions()
+        PermissionsHelper.checkAndRequestPermissions(this)
+
 
 
         // Log the current speakerphone status
@@ -358,35 +343,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
 
 
-//            // Modify your call button to show call dialog
-//            binding.callButton.setOnClickListener {
-//                if (currentCall == null) {
-//                    showCallDialog()
-//                } else {
-//                    try {
-//                        val prm = CallOpParam()
-//                        prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-//                        currentCall!!.hangup(prm)
-//                        utils.turnOffLed()
-//                    } catch (e: Exception) {
-//                        println(e)
-//                    }
-//                }
-//            }
-//
-//            loginDialogManager = LoginDialogManager(this)
-//            // Add click listener for settings button
-//            binding.settingsButton.setOnClickListener {
-//                showSettingsDialog()
-//            }
-//
-//
-//            // Add a register button to your layout and handle it
-//            binding.settingsButton.setOnClickListener {
-//                showRegistrationDialog()
-//            }
-
-
         binding.callButton.setOnClickListener {
             if (currentCall == null) {
                 viewManager.showCallDialog(
@@ -457,6 +413,17 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     forceReRegistration()
                 }
             )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (!PermissionsHelper.areAllPermissionsGranted(this)) {
+            PermissionsHelper.handlePermissionResult(this, requestCode, permissions, grantResults)
         }
     }
 
@@ -833,7 +800,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                     currentCall = null
                     utils.turnOffLed()
                     if (account?.isRegistrationActive() == true) {
-                        binding.callButton.text = CallButtonTyoe.CALL_HQ
+                        binding.callButton.text = CallButtonType.CALL_HQ
                         try {
                             coroutineScope.cancel()
                             stopPlayingSound()
@@ -842,7 +809,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
-                        binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                        binding.callButton.text = CallButtonType.RE_REGISTER
                         coroutineScope.launch { flashLedRapidly() }
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
@@ -855,12 +822,12 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 )
 
                 if (ci.state in callingStates) {
-                    binding.callButton.text = CallButtonTyoe.CALLING
+                    binding.callButton.text = CallButtonType.CALLING
 
                 }
 
                 if (ci.state == pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED) {
-                    binding.callButton.text = CallButtonTyoe.HANGUP
+                    binding.callButton.text = CallButtonType.HANGUP
                 }
 
                 binding.callStatusTextView.text = ci.stateText
@@ -906,7 +873,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
                 if (msg.obj.toString().contains("Registration successful")) {
                     // play 'success' wav file
-                    binding.callButton.text = CallButtonTyoe.CALL_HQ
+                    binding.callButton.text = CallButtonType.CALL_HQ
                     if (!isSoundPlayed) {
                         playSuccessSoundOnce()
                         isSoundPlayed = true
@@ -916,9 +883,9 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
                 if (msg.obj.toString().contains("Registration failed")) {
                     // play 'Registration failed' wav file
                     // flash LED
-                    binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                    binding.callButton.text = CallButtonType.RE_REGISTER
                     if (account?.isRegistrationActive() == true) {
-                        binding.callButton.text = CallButtonTyoe.CALL_HQ
+                        binding.callButton.text = CallButtonType.CALL_HQ
                         try {
                             coroutineScope.cancel()
                             stopPlayingSound()
@@ -927,7 +894,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 //                            RuntimeException("Error in coroutine cancel: $e").sendWithAcra()
                         }
                     } else {
-                        binding.callButton.text = CallButtonTyoe.RE_REGISTER
+                        binding.callButton.text = CallButtonType.RE_REGISTER
                         coroutineScope.launch { flashLedRapidly() }
                         playSoundInLoop(SoundType.RETRY_REGISTER)
                     }
@@ -998,7 +965,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             }
 
             account?.setRegistration(true)
-            binding.callButton.text = CallButtonTyoe.RE_REGISTER
+            binding.callButton.text = CallButtonType.RE_REGISTER
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in force re-registration: $e")
@@ -1077,52 +1044,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         mediaPlayer = null
     }
 
-    object CallMessageType {
-        const val INCOMING_CALL = 1
-        const val CALL_STATE = 2
-        const val REG_STATE = 3
-        const val BUDDY_STATE = 4
-        const val CALL_MEDIA_STATE = 5
-        const val CHANGE_NETWORK = 6
-    }
-
-    object CallButtonTyoe {
-        const val RE_REGISTER = "Re-Register"
-        const val CALL_HQ = "CALL HQ"
-        const val CALLING = "Calling..."
-        const val HANGUP = "Hangup"
-    }
-
-    object SoundType {
-        const val NO_VPN = "no_vpn"
-        const val AIRPLANE_MODE = "airplane_mode"
-        const val NO_INTERNET = "no_internet"
-        const val RETRY_REGISTER = "retry_register"
-    }
 
 
-    private fun checkPermissions() {
-        // TODO: READ MORE PERMISSIONS
-        val permissions = arrayOf(
-            Manifest.permission.INTERNET,
-            Manifest.permission.WAKE_LOCK,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS,
-            Manifest.permission.ACCESS_WIFI_STATE,
-            Manifest.permission.ACCESS_NETWORK_STATE,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.RECEIVE_BOOT_COMPLETED,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
-            Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
-            Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        )
-        ActivityCompat.requestPermissions(this@MainActivity, permissions, 0)
-    }
 
 
 
