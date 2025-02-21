@@ -58,7 +58,7 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.jetbrains.kotlinx.coroutines.android)
-
+    implementation ("com.google.android.material:material:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
 
 

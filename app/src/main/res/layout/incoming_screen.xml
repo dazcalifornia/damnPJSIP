@@ -1,50 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center">
+    android:layout_height="match_parent"
+    android:background="@color/primary">
 
-    <TextView
+    <!-- Caller Information -->
+    <LinearLayout
+        android:id="@+id/callerInfoContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Incoming Call"
-        android:textSize="24sp"
-        android:gravity="center"
-        android:layout_marginBottom="16dp"/>
+        android:layout_marginTop="64dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_constraintTop_toTopOf="parent">
 
-    <TextView
-        android:id="@+id/incomingNumberText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginBottom="32dp"/>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Incoming Call"
+            android:textColor="@color/white"
+            android:textSize="24sp" />
 
+        <TextView
+            android:id="@+id/incomingNumberText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textColor="@color/white"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Call Controls -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:layout_marginBottom="64dp"
         android:gravity="center"
-        android:layout_marginTop="16dp">
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent">
 
-        <Button
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/declineButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:background="@drawable/circle_button_red"
-            android:text="Decline"
-            android:textColor="#FFFFFF"
-            android:layout_marginEnd="48dp"/>
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="32dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="Decline Call"
+            app:backgroundTint="@color/red"
+            app:tint="@color/white" />
 
-        <Button
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/answerButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:background="@drawable/circle_button_green"
-            android:text="Answer"
-            android:textColor="#FFFFFF"/>
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_call"
+            android:contentDescription="Answer Call"
+            app:backgroundTint="@color/green"
+            app:tint="@color/white" />
     </LinearLayout>
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
