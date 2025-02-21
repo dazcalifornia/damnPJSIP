@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.synapes.selen_alarm_box
 
 import android.app.Dialog
@@ -69,11 +71,15 @@ class ViewManager(private val context: Context) {
     }
 
 
+    // In ViewManager.kt
     fun showCallDialog(
         currentDestination: String,
         onMakeCall: (destination: String) -> Unit
     ) {
-        callDialog = Dialog(context, R.style.FullScreenDialog).apply {
+        // Dismiss any existing dialog first
+        callDialog?.dismiss()
+
+        callDialog = Dialog(context).apply {
             setContentView(R.layout.call_dialog)
             setCancelable(true)
 
@@ -81,7 +87,12 @@ class ViewManager(private val context: Context) {
             val makeCallButton = findViewById<Button>(R.id.makeCallButton)
             val cancelButton = findViewById<Button>(R.id.cancelCallButton)
 
+            // Clear previous text and set new destination
+            destination.text.clear()
             destination.setText(currentDestination)
+
+            // Allow editing
+            destination.isEnabled = true
 
             makeCallButton.setOnClickListener {
                 val destNumber = destination.text.toString()
@@ -93,8 +104,6 @@ class ViewManager(private val context: Context) {
 
                 onMakeCall(destNumber)
                 dismiss()
-                // Show calling screen immediately after making call
-                showCallingScreen(destNumber) { /* Handle end call */ }
             }
 
             cancelButton.setOnClickListener {
@@ -105,40 +114,6 @@ class ViewManager(private val context: Context) {
         }
     }
 
-
-//    fun showCallDialog(
-//        currentDestination: String,
-//        onMakeCall: (destination: String) -> Unit
-//    ) {
-//        callDialog = Dialog(context).apply {
-//            setContentView(R.layout.call_dialog)
-//            setCancelable(true)
-//
-//            val destination = findViewById<EditText>(R.id.destinationEditText)
-//            val makeCallButton = findViewById<Button>(R.id.makeCallButton)
-//            val cancelButton = findViewById<Button>(R.id.cancelCallButton)
-//
-//            destination.setText(currentDestination)
-//
-//            makeCallButton.setOnClickListener {
-//                val destNumber = destination.text.toString()
-//
-//                if (destNumber.isBlank()) {
-//                    Toast.makeText(context, "Please enter destination number", Toast.LENGTH_SHORT).show()
-//                    return@setOnClickListener
-//                }
-//
-//                onMakeCall(destNumber)
-//                dismiss()
-//            }
-//
-//            cancelButton.setOnClickListener {
-//                dismiss()
-//            }
-//
-//            show()
-//        }
-//    }
 
     fun showCallingScreen(
         number: String,
@@ -205,44 +180,6 @@ class ViewManager(private val context: Context) {
         }
     }
 
-//    fun showCallingScreen(
-//        number: String,
-//        onEndCall: () -> Unit
-//    ) {
-//        callingScreen = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
-//            setContentView(R.layout.calling_screen)
-//            setCancelable(false)
-//
-//            val callNumberText = findViewById<TextView>(R.id.callNumberText)
-//            val callStatusText = findViewById<TextView>(R.id.callStatusText)
-//            val callDurationText = findViewById<TextView>(R.id.callDurationText)
-//            val endCallButton = findViewById<Button>(R.id.endCallButton)
-//
-//            callNumberText.text = number
-//            callStatusText.text = "Calling..."
-//
-//            callStartTime = System.currentTimeMillis()
-//            callDurationHandler = Handler(Looper.getMainLooper())
-//
-//            val durationRunnable = object : Runnable {
-//                override fun run() {
-//                    val duration = System.currentTimeMillis() - callStartTime
-//                    val seconds = (duration / 1000) % 60
-//                    val minutes = (duration / (1000 * 60)) % 60
-//                    callDurationText.text = String.format("%02d:%02d", minutes, seconds)
-//                    callDurationHandler?.postDelayed(this, 1000)
-//                }
-//            }
-//
-//            endCallButton.setOnClickListener {
-//                onEndCall()
-//                dismiss()
-//            }
-//
-//            show()
-//            callDurationHandler?.postDelayed(durationRunnable, 0)
-//        }
-//    }
 
     fun showIncomingCallScreen(
         remoteUri: String,
@@ -278,37 +215,6 @@ class ViewManager(private val context: Context) {
             show()
         }
     }
-
-
-
-//    fun showIncomingCallScreen(
-//        remoteUri: String,
-//        onAnswer: () -> Unit,
-//        onDecline: () -> Unit
-//    ) {
-//        incomingCallScreen = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
-//            setContentView(R.layout.incoming_screen)
-//            setCancelable(false)
-//
-//            val incomingNumberText = findViewById<TextView>(R.id.incomingNumberText)
-//            val answerButton = findViewById<Button>(R.id.answerButton)
-//            val declineButton = findViewById<Button>(R.id.declineButton)
-//
-//            incomingNumberText.text = remoteUri
-//
-//            answerButton.setOnClickListener {
-//                onAnswer()
-//                dismiss()
-//            }
-//
-//            declineButton.setOnClickListener {
-//                onDecline()
-//                dismiss()
-//            }
-//
-//            show()
-//        }
-//    }
 
     fun updateCallStatus(status: String) {
         callingScreen?.findViewById<TextView>(R.id.callStatusText)?.text = status

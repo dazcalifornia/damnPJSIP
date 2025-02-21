@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private lateinit var uiManager: UIManager
     private lateinit var serviceManager: ServiceManager
     private lateinit var accountManager: AccountManager
+    private lateinit var callStateManager: CallStateManager
 
     private val utils = Utils()
     private var buddyList: ArrayList<Map<String, String?>> = ArrayList()
@@ -129,6 +130,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         startServices()
 
         accountManager = AccountManager(this, viewManager, binding)
+        callStateManager = CallStateManager(this, viewManager)
 
         PermissionsHelper.checkAndRequestPermissions(this)
         startSelenForegroundService()
@@ -139,6 +141,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         )
         // Turn off the LED when the app starts
         utils.turnOffLed()
+
 
         val view = binding.root
         setContentView(view)
@@ -153,6 +156,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
 
     }
+
+
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -180,32 +185,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         }
     }
 
-
-    private fun showLoginDialog() {
-        loginDialogManager.showLoginDialog { selfExt, destExt ->
-            // Save the new values
-            PreferencesManager.setSelfExtension(this, selfExt)
-            PreferencesManager.setDestinationExtension(this, destExt)
-
-            // Update Config
-            Config.SELF_EXT = selfExt
-            Config.DESTINATION_EXT = destExt
-            Config.ACC_ID_URI = "sip:$selfExt@${Config.SERVER_ADDRESS}"
-            Config.CALL_DST_URI = "sip:$destExt@${Config.SERVER_ADDRESS}"
-            Config.USERNAME = selfExt
-            Config.PASSWORD = selfExt
-
-            // Force re-registration with new credentials
-            forceReRegistration()
-
-            // Update UI
-            "${Config.USERNAME} -> ${Config.DESTINATION_EXT}".also {
-                binding.callerTextView.text = it
-            }
-
-            Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     private fun startSelenForegroundService() {
         Log.d(TAG, " --- Starting SelenForegroundService --- ")
@@ -373,27 +352,50 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     }
 
     // Update your existing notifyCallState
+
     override fun notifyCallState(call: MyCall?) {
-        if (currentCall == null || call!!.id != currentCall!!.id) return
+        if (currentCall == null || call == null) return
 
         try {
             val ci = call.info
-            runOnUiThread {
-                when (ci.state) {
-                    pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> {
-                        viewManager.dismissCallScreens()
-                        currentCall = null
-                        utils.turnOffLed()
-                    }
-                    pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED -> {
-                        viewManager.updateCallStatus("Connected")
-                    }
+            when (ci.state) {
+                pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> {
+                    callStateManager.handleEvent(CallEvent.CallDisconnected)
+                    currentCall = null  // Clear the reference
+                    utils.turnOffLed()
                 }
+                pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED -> {
+                    callStateManager.handleEvent(CallEvent.CallConnected)
+                }
+                else -> {}
             }
         } catch (e: Exception) {
-            println(e)
+            Log.e(TAG, "Error in notifyCallState: $e")
+            callStateManager.handleEvent(CallEvent.CallError(e.message ?: "Unknown error"))
         }
     }
+
+//    override fun notifyCallState(call: MyCall?) {
+//        if (currentCall == null || call!!.id != currentCall!!.id) return
+//
+//        try {
+//            val ci = call.info
+//            runOnUiThread {
+//                when (ci.state) {
+//                    pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> {
+//                        viewManager.dismissCallScreens()
+//                        currentCall = null
+//                        utils.turnOffLed()
+//                    }
+//                    pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED -> {
+//                        viewManager.updateCallStatus("Connected")
+//                    }
+//                }
+//            }
+//        } catch (e: Exception) {
+//            println(e)
+//        }
+//    }
 
     override fun notifyCallMediaState(call: MyCall?) {
         Log.d(
@@ -824,13 +826,20 @@ private fun setupBasicUI() {
             Log.e(TAG, "Error in coroutine cancel: $e")
         }
     }
+    // Before making a new call, check if we can
     private fun handleMakeCall(destination: String) {
-        // Update config
-        Config.DESTINATION_EXT = destination
-        Config.CALL_DST_URI = "sip:${destination}@${Config.SERVER_ADDRESS}"
-        PreferencesManager.setDestinationExtension(this, destination)
-
         try {
+            // Update Config with new destination
+            Config.DESTINATION_EXT = destination
+            Config.CALL_DST_URI = "sip:${destination}@${Config.SERVER_ADDRESS}"
+
+            // Save to preferences
+            PreferencesManager.setDestinationExtension(this, destination)
+
+            // Update UI
+            binding.callerTextView.text = "${Config.USERNAME} -> ${Config.DESTINATION_EXT}"
+
+            // Make the call
             val call = MyCall(account, -1)
             val prm = CallOpParam(true)
             call.makeCall(Config.CALL_DST_URI, prm)
@@ -847,16 +856,23 @@ private fun setupBasicUI() {
             Toast.makeText(this, "Failed to make call", Toast.LENGTH_SHORT).show()
         }
     }
+
+
     private fun handleEndCall() {
         try {
             if (currentCall != null) {
                 val hangupPrm = CallOpParam()
                 hangupPrm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
                 currentCall!!.hangup(hangupPrm)
+                currentCall = null  // Clear the reference
                 utils.turnOffLed()
+
+                // Make sure state manager knows about the end call
+                callStateManager.handleEvent(CallEvent.EndCall)
             }
         } catch (e: Exception) {
-            println(e)
+            Log.e(TAG, "Error ending call: $e")
+            callStateManager.handleEvent(CallEvent.CallError(e.message ?: "Unknown error"))
         }
     }
     private fun handleRegistration(username: String, password: String) {
