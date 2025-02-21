@@ -17,6 +17,7 @@ class ViewManager(private val context: Context) {
     private var callDurationHandler: Handler? = null
     private var callStartTime: Long = 0
 
+    // And in ViewManager.kt, update the registration dialog implementation:
     fun showRegistrationDialog(
         currentUsername: String,
         currentPassword: String,
@@ -26,26 +27,33 @@ class ViewManager(private val context: Context) {
             setContentView(R.layout.registration_dialog)
             setCancelable(true)
 
-            val username = findViewById<EditText>(R.id.usernameEditText)
-            val password = findViewById<EditText>(R.id.passwordEditText)
+            // Find views
+            val usernameInput = findViewById<EditText>(R.id.usernameEditText)
+            val passwordInput = findViewById<EditText>(R.id.passwordEditText)
             val registerButton = findViewById<Button>(R.id.registerButton)
             val cancelButton = findViewById<Button>(R.id.cancelRegButton)
+//            val statusText = findViewById<TextView>(R.id.registrationStatusText)
 
-            username.setText(currentUsername)
-            password.setText(currentPassword)
+            // Set current values
+            usernameInput.setText(currentUsername)
+            passwordInput.setText(currentPassword)
 
             registerButton.setOnClickListener {
-                val newUsername = username.text.toString()
-                val newPassword = password.text.toString()
+                val newUsername = usernameInput.text.toString()
+                val newPassword = passwordInput.text.toString()
 
                 if (newUsername.isBlank() || newPassword.isBlank()) {
                     Toast.makeText(context, "Please fill in all fields", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
 
+                // Show loading state
+                registerButton.isEnabled = false
+//                statusText.text = "Changing account..."
+
+                // Trigger account change
                 onRegister(newUsername, newPassword)
                 dismiss()
-                Toast.makeText(context, "Registration updated", Toast.LENGTH_SHORT).show()
             }
 
             cancelButton.setOnClickListener {
@@ -55,6 +63,45 @@ class ViewManager(private val context: Context) {
             show()
         }
     }
+
+//    fun showRegistrationDialog(
+//        currentUsername: String,
+//        currentPassword: String,
+//        onRegister: (username: String, password: String) -> Unit
+//    ) {
+//        registrationDialog = Dialog(context).apply {
+//            setContentView(R.layout.registration_dialog)
+//            setCancelable(true)
+//
+//            val username = findViewById<EditText>(R.id.usernameEditText)
+//            val password = findViewById<EditText>(R.id.passwordEditText)
+//            val registerButton = findViewById<Button>(R.id.registerButton)
+//            val cancelButton = findViewById<Button>(R.id.cancelRegButton)
+//
+//            username.setText(currentUsername)
+//            password.setText(currentPassword)
+//
+//            registerButton.setOnClickListener {
+//                val newUsername = username.text.toString()
+//                val newPassword = password.text.toString()
+//
+//                if (newUsername.isBlank() || newPassword.isBlank()) {
+//                    Toast.makeText(context, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+//                    return@setOnClickListener
+//                }
+//
+//                onRegister(newUsername, newPassword)
+//                dismiss()
+//                Toast.makeText(context, "Registration updated", Toast.LENGTH_SHORT).show()
+//            }
+//
+//            cancelButton.setOnClickListener {
+//                dismiss()
+//            }
+//
+//            show()
+//        }
+//    }
 
     fun showCallDialog(
         currentDestination: String,
@@ -175,4 +222,6 @@ class ViewManager(private val context: Context) {
         incomingCallScreen?.dismiss()
         callDurationHandler?.removeCallbacksAndMessages(null)
     }
+
+
 }

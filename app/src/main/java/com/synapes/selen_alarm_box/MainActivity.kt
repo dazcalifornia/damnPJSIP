@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     private lateinit var deviceManager: DeviceStatusManager
     private lateinit var uiManager: UIManager
     private lateinit var serviceManager: ServiceManager
+    private lateinit var accountManager: AccountManager
 
     private val utils = Utils()
     private var buddyList: ArrayList<Map<String, String?>> = ArrayList()
@@ -127,6 +128,8 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
         initializeManagers()
         startServices()
 
+        accountManager = AccountManager(this, viewManager, binding)
+
         PermissionsHelper.checkAndRequestPermissions(this)
         startSelenForegroundService()
 
@@ -144,6 +147,11 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+        // Setup settings button
+        binding.settingsButton.setOnClickListener {
+            accountManager.showAccountChangeDialog()
+        }
+
     }
 
     override fun onRequestPermissionsResult(
@@ -165,12 +173,13 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_settings -> {
-                showLoginDialog()
+                accountManager.showAccountChangeDialog()
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
+
 
     private fun showLoginDialog() {
         loginDialogManager.showLoginDialog { selfExt, destExt ->
@@ -213,7 +222,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
     private fun startPJSUA() {
         Log.d(TAG, " --- Starting PJSUA --- ")
-
 
         // Initialize PJSUA
         app = app ?: MyApp().also {
@@ -270,58 +278,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
             Log.d(TAG, " +++ Buddy: ${buddyList[i]} +++ ")
         }
     }
-
-    private fun handleButtonState(buttonState: Int) {
-        // Button State = 1 -> Button Released
-        // Button State = 0 -> Button Pressed
-        // LED ON = 0, LED OFF = 1
-
-        // Pressed and no ongoing call -> make call
-        if (buttonState == 0 && currentCall == null) {
-
-            // Simulate crash
-//            utils.simulateCrash()
-
-            try {/* Make call (to itself) */
-                val call = MyCall(account, -1)
-                val prm = CallOpParam(true)
-                call.makeCall(Config.CALL_DST_URI, prm)
-                currentCall = call
-                // OUTPUT GPIO0 -- GPIO1003
-                // LED ON
-                utils.turnOnLed()
-            } catch (e: Exception) {
-                println(e)
-//                RuntimeException("Error in making call: $e").sendWithAcra()
-            }
-        }
-
-        // Button Released and in current call -> keep led on
-        else if (buttonState == 1 && currentCall != null) {
-            utils.turnOnLed()
-        }
-
-        // Pressed and ongoing call -> hangup
-        else if (buttonState == 0 && currentCall != null) {
-            try {
-                val prm = CallOpParam()
-                prm.statusCode = pjsip_status_code.PJSIP_SC_DECLINE
-                currentCall!!.hangup(prm)
-                // if led is on turn it off
-                if (buttonState == 0) utils.turnOffLed()
-            } catch (e: Exception) {
-                println(e)
-//                RuntimeException("Error in hanging up call: $e").sendWithAcra()
-            }
-        }
-        // Normal state (button released and no ongoing call) -> turn off led
-        else if (buttonState == 1 && currentCall == null) {
-            utils.turnOffLed()
-        } else {
-            Log.e(TAG, " ******** CAN'T REACH THIS POINT ********")
-        }
-    }
-
 
     private fun disableCallButton(runModeText: String) {
         binding.callButton.isEnabled = false
@@ -684,7 +640,6 @@ class MainActivity : AppCompatActivity(), Handler.Callback, MyAppObserver {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in force re-registration: $e")
-//            RuntimeException("Error in force re-registration: $e").sendWithAcra()
         }
     }
 
