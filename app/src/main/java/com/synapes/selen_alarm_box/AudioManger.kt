@@ -69,4 +69,42 @@ class AudioSystemManager(private val context: Context) {
         audioManager.isSpeakerphoneOn = true
         Log.d(tag, "Speakerphone set using deprecated method")
     }
+
+    fun toggleMute(isMuted: Boolean) {
+        try {
+            audioManager.isMicrophoneMute = isMuted
+            Log.d(tag, "Microphone muted: $isMuted")
+        } catch (e: Exception) {
+            Log.e(tag, "Error toggling mute: $e")
+        }
+    }
+
+
+
+    fun toggleSpeaker(isSpeakerOn: Boolean) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // For Android 12 and above
+                val audioDeviceInfo = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                    .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+
+                if (audioDeviceInfo != null) {
+                    audioManager.setCommunicationDevice(audioDeviceInfo)
+                }
+            } else {
+                // For older Android versions
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = isSpeakerOn
+            }
+
+            audioManager.mode = if (isSpeakerOn) {
+                AudioManager.MODE_IN_COMMUNICATION
+            } else {
+                AudioManager.MODE_NORMAL
+            }
+            Log.d(tag, "Speaker enabled: $isSpeakerOn")
+        } catch (e: Exception) {
+            Log.e(tag, "Error toggling speaker: $e")
+        }
+    }
 }

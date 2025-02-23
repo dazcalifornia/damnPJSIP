@@ -4,13 +4,16 @@ package com.synapes.selen_alarm_box
 
 import android.app.Dialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class ViewManager(private val context: Context) {
@@ -22,6 +25,7 @@ class ViewManager(private val context: Context) {
     private var callStartTime: Long = 0
     private var isMuted = false
     private var isSpeakerOn = false
+    private val audioManager = AudioSystemManager(context)
 
     // And in ViewManager.kt, update the registration dialog implementation:
     fun showRegistrationDialog(
@@ -114,12 +118,11 @@ class ViewManager(private val context: Context) {
         }
     }
 
-
     fun showCallingScreen(
         number: String,
         onEndCall: () -> Unit
     ) {
-        callingScreen = Dialog(context, R.style.FullScreenDialog).apply {
+        callingScreen = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
             setContentView(R.layout.calling_screen)
             setCancelable(false)
             window?.setFlags(
@@ -127,6 +130,7 @@ class ViewManager(private val context: Context) {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN
             )
 
+            // Find views
             val callNumberText = findViewById<TextView>(R.id.callNumberText)
             val callStatusText = findViewById<TextView>(R.id.callStatusText)
             val callDurationText = findViewById<TextView>(R.id.callDurationText)
@@ -134,9 +138,11 @@ class ViewManager(private val context: Context) {
             val muteButton = findViewById<FloatingActionButton>(R.id.muteButton)
             val speakerButton = findViewById<FloatingActionButton>(R.id.speakerButton)
 
+            // Set initial values
             callNumberText.text = number
             callStatusText.text = "Calling..."
 
+            // Setup duration timer
             callStartTime = System.currentTimeMillis()
             callDurationHandler = Handler(Looper.getMainLooper())
 
@@ -150,6 +156,7 @@ class ViewManager(private val context: Context) {
                 }
             }
 
+            // Set button click listeners
             endCallButton.setOnClickListener {
                 onEndCall()
                 dismiss()
@@ -157,28 +164,41 @@ class ViewManager(private val context: Context) {
 
             muteButton.setOnClickListener {
                 isMuted = !isMuted
-                muteButton.setImageResource(
-                    if (isMuted) android.R.drawable.ic_lock_silent_mode
-                    else android.R.drawable.ic_lock_silent_mode_off
-                )
-                // Handle mute in your audio manager
-//                AudioSystemManager(context).handleMute(isMuted)
+                muteButton.apply {
+                    setImageResource(
+                        if (isMuted) android.R.drawable.ic_lock_silent_mode
+                        else android.R.drawable.ic_lock_silent_mode_off
+                    )
+                    backgroundTintList = ColorStateList.valueOf(
+                        if (isMuted) context.getColor(R.color.red)
+                        else context.getColor(R.color.white)
+                    )
+                }
+                audioManager.toggleMute(isMuted)
             }
 
             speakerButton.setOnClickListener {
                 isSpeakerOn = !isSpeakerOn
-                speakerButton.setImageResource(
-                    if (isSpeakerOn) android.R.drawable.ic_lock_silent_mode_off
-                    else android.R.drawable.ic_lock_silent_mode
-                )
-                // Handle speaker in your audio manager
-//                AudioSystemManager(context).handleSpeaker(isSpeakerOn)
+                speakerButton.apply {
+                    setImageResource(
+                        if (isSpeakerOn) android.R.drawable.ic_lock_silent_mode_off
+                        else android.R.drawable.ic_lock_silent_mode
+                    )
+                    backgroundTintList = ColorStateList.valueOf(
+                        if (isSpeakerOn) context.getColor(R.color.red)
+                        else context.getColor(R.color.white)
+                    )
+                }
+                audioManager.toggleSpeaker(isSpeakerOn)
             }
 
             show()
             callDurationHandler?.postDelayed(durationRunnable, 0)
         }
     }
+
+
+
 
 
     fun showIncomingCallScreen(
@@ -219,23 +239,28 @@ class ViewManager(private val context: Context) {
     fun updateCallStatus(status: String) {
         callingScreen?.findViewById<TextView>(R.id.callStatusText)?.text = status
     }
-//    fun updateCallStatus(status: String) {
-//        callingScreen?.findViewById<TextView>(R.id.callStatusText)?.text = status
-//    }
+
+    fun dismissCallScreens() {
+        callingScreen?.let {
+            // Reset audio states
+            if (isMuted) {
+                audioManager.toggleMute(false)
+                isMuted = false
+            }
+            if (isSpeakerOn) {
+                audioManager.toggleSpeaker(false)
+                isSpeakerOn = false
+            }
+            it.dismiss()
+        }
+        incomingCallScreen?.dismiss()
+        callDurationHandler?.removeCallbacksAndMessages(null)
+    }
 
     fun dismissAll() {
         registrationDialog?.dismiss()
         callDialog?.dismiss()
-        callingScreen?.dismiss()
-        incomingCallScreen?.dismiss()
-        callDurationHandler?.removeCallbacksAndMessages(null)
+        dismissCallScreens()
     }
-
-    fun dismissCallScreens() {
-        callingScreen?.dismiss()
-        incomingCallScreen?.dismiss()
-        callDurationHandler?.removeCallbacksAndMessages(null)
-    }
-
 
 }
